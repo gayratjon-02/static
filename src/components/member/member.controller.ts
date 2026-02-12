@@ -5,10 +5,8 @@ import { MemberService } from './member.service';
 export class MemberController {
     constructor(private readonly memberService: MemberService) {}
 
-@Get('test')
-public testEndpoint() {
-    return this.memberService.testMethod();
-}
-
-
+    @Get('test')
+    public testEndpoint() {
+        return this.memberService.testMethod();
+    }
 }

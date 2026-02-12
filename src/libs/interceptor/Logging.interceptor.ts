@@ -23,6 +23,6 @@ export class LoggingInterceptor implements NestInterceptor {
 	}
 
 	private stringify(data: any): string {
-		return JSON.stringify(data).slice(0, 100);
+		return (JSON.stringify(data) ?? '').slice(0, 100);
 	}
 }
