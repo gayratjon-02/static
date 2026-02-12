@@ -2,6 +2,7 @@ export enum Message {
 	// General
 	SOMETHING_WENT_WRONG = 'Something went wrong!',
 	NO_DATA_FOUND = 'No data found!',
+    NO_BRAND_FOUND = 'No brand found!',
 	CREATE_FAILED = 'Create failed!',
 	UPDATE_FAILED = 'Update failed!',
 	REMOVE_FAILED = 'Remove failed!',

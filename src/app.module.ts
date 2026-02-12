@@ -6,6 +6,7 @@ import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './components/auth/auth.module';
 import { MemberModule } from './components/member/member.module';
 import { BrandModule } from './components/brand/brand.module';
+import { ProductModule } from './components/product/product.module';
 
 @Module({
 	controllers: [AppController],
@@ -23,6 +24,8 @@ import { BrandModule } from './components/brand/brand.module';
 		MemberModule,
 
 		BrandModule,
+
+		ProductModule,
 	],
 })
 export class AppModule {}
