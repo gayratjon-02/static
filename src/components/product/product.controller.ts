@@ -3,6 +3,7 @@ import { ProductService } from './product.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { CreateProductDto } from '../../libs/dto/product/create-product.dto';
+import { UpdateProductDto } from '../../libs/dto/product/update-product.dto';
 import { Product } from '../../libs/types/product/product.type';
 import { Member } from '../../libs/types/member/member.type';
 
@@ -40,5 +41,16 @@ export class ProductController {
 		@AuthMember() authMember: Member,
 	): Promise<Product> {
 		return this.productService.getProduct(id, authMember);
+	}
+
+	// updateProduct
+	@UseGuards(AuthGuard)
+	@Post('updateProductById/:id')
+	public async updateProduct(
+		@Param('id') id: string,
+		@Body() input: UpdateProductDto,
+		@AuthMember() authMember: Member,
+	): Promise<Product> {
+		return this.productService.updateProduct(id, input, authMember);
 	}
 }

@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { CreateProductDto } from '../../libs/dto/product/create-product.dto';
+import { UpdateProductDto } from '../../libs/dto/product/update-product.dto';
 import { Message } from '../../libs/enums/common.enum';
+import { T } from '../../libs/types/common';
 import { Product } from '../../libs/types/product/product.type';
 import { Member } from '../../libs/types/member/member.type';
 
@@ -121,6 +123,59 @@ export class ProductService {
 
 			const { brands, ...product } = data;
 			return product as Product;
+		} catch (err) {
+			throw err;
+		}
+	}
+
+	// updateProduct method
+	public async updateProduct(id: string, input: UpdateProductDto, authMember: Member): Promise<Product> {
+		try {
+			// Ownership: product -> brand -> user_id
+			const { data: existing, error: findError } = await this.databaseService.client
+				.from('products')
+				.select('_id, brands!inner(user_id)')
+				.eq('_id', id)
+				.eq('brands.user_id', authMember._id)
+				.single();
+
+			if (findError || !existing) {
+				throw new BadRequestException(Message.NO_DATA_FOUND);
+			}
+
+			const updateData: T = {};
+
+			const fields = [
+				'name', 'description', 'usps', 'photo_url',
+				'has_physical_product', 'price_text', 'product_url',
+				'star_rating', 'review_count', 'ingredients_features',
+				'before_description', 'after_description', 'offer_text',
+			];
+
+			for (const field of fields) {
+				if (input[field] !== undefined) {
+					updateData[field] = input[field];
+				}
+			}
+
+			if (Object.keys(updateData).length === 0) {
+				throw new BadRequestException(Message.BAD_REQUEST);
+			}
+
+			updateData.updated_at = new Date();
+
+			const { data: updated, error: updateError } = await this.databaseService.client
+				.from('products')
+				.update(updateData)
+				.eq('_id', id)
+				.select('*')
+				.single();
+
+			if (updateError || !updated) {
+				throw new InternalServerErrorException(Message.UPDATE_FAILED);
+			}
+
+			return updated as Product;
 		} catch (err) {
 			throw err;
 		}
