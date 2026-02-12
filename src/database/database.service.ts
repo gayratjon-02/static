@@ -8,7 +8,7 @@ export class DatabaseService {
 
 	constructor(private configService: ConfigService) {
 		const supabaseUrl = this.configService.get<string>('SUPABASE_URL');
-		const supabaseKey = this.configService.get<string>('SUPABASE_ANON_KEY');
+		const supabaseKey = this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY');
 
 		this.supabase = createClient(supabaseUrl, supabaseKey);
 	}
