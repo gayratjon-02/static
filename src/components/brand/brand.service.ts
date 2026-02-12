@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { CreateBrandDto } from '../../libs/dto/brand/create-brand.dto';
+import { UpdateBrandDto } from '../../libs/dto/brand/update-brand.dto';
 import { Message } from '../../libs/enums/common.enum';
+import { T } from '../../libs/types/common';
 import { Brand } from '../../libs/types/brand/brand.type';
 import { Member } from '../../libs/types/member/member.type';
 
@@ -101,6 +103,48 @@ export class BrandService {
 
 			if (error || !data) {
 				throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+			}
+
+			return data as Brand;
+		} catch (err) {
+			throw err;
+		}
+	}
+
+	// updateBrand method
+	public async updateBrand(id: string, input: UpdateBrandDto, authMember: Member): Promise<Brand> {
+		try {
+			const updateData: T = {};
+
+			const fields = [
+				'name', 'description', 'website_url', 'industry',
+				'logo_url', 'primary_color', 'secondary_color',
+				'accent_color', 'background_color',
+				'voice_tags', 'target_audience', 'competitors',
+			];
+
+			for (const field of fields) {
+				if (input[field] !== undefined) {
+					updateData[field] = input[field];
+				}
+			}
+
+			if (Object.keys(updateData).length === 0) {
+				throw new BadRequestException(Message.BAD_REQUEST);
+			}
+
+			updateData.updated_at = new Date();
+
+			const { data, error } = await this.databaseService.client
+				.from('brands')
+				.update(updateData)
+				.eq('_id', id)
+				.eq('user_id', authMember._id)
+				.select('*')
+				.single();
+
+			if (error || !data) {
+				throw new InternalServerErrorException(Message.UPDATE_FAILED);
 			}
 
 			return data as Brand;
