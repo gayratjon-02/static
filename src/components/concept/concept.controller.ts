@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ConceptService } from './concept.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AdminRole } from '../../libs/enums/common.enum';
 import { CreateConceptDto } from '../../libs/dto/concept/create-concept.dto';
+import { UpdateConceptDto } from '../../libs/dto/concept/update-concept.dto';
 import { AdConcept } from '../../libs/types/concept/concept.type';
 
 @Controller('concept')
@@ -17,6 +18,14 @@ export class ConceptController {
 	@Post('createConceptByAdmin')
 	public async createConcept(@Body() input: CreateConceptDto): Promise<AdConcept> {
 		return this.conceptService.createConcept(input);
+	}
+
+	// updateConceptByAdmin — admin only
+	@UseGuards(RolesGuard)
+	@Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_ADMIN)
+	@Post('updateConceptByAdmin/:id')
+	public async updateConcept(@Param('id') id: string, @Body() input: UpdateConceptDto): Promise<AdConcept> {
+		return this.conceptService.updateConcept(id, input);
 	}
 
 	// getConcepts — concept library
