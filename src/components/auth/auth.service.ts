@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../database/database.service';
 import { Message } from '../../libs/enums/common.enum';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
+import { LoginDto } from '../../libs/dto/member/login.dto';
 import { AuthResponse } from '../../libs/types/member/member.type';
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcryptjs';
@@ -43,7 +44,6 @@ export class AuthService {
 				.select()
 				.single();
 
-
 			if (error || !newUser) throw new BadRequestException(Message.CREATE_FAILED);
 
 			// 4. JWT token
@@ -61,6 +61,48 @@ export class AuthService {
 			};
 		} catch (err: any) {
 			console.log('Error, AuthService.signup:', err.message);
+			if (err instanceof BadRequestException) throw err;
+			throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
+		}
+	}
+
+	/** Login progress */
+	public async login(input: LoginDto): Promise<AuthResponse> {
+		const { email, password } = input;
+
+		try {
+			// 1. Find user by email
+			const { data: user, error } = await this.databaseService.client
+				.from('users')
+				.select('*')
+				.eq('email', email)
+				.single();
+
+			if (error || !user) throw new BadRequestException(Message.USER_NOT_FOUND);
+
+			// 2. Check member status 
+			if (user.member_status === 'deleted') throw new BadRequestException(Message.USER_NOT_FOUND);
+			if (user.member_status === 'suspended') throw new BadRequestException(Message.ACCOUNT_SUSPENDED);
+
+			// 3. Compare passwords
+			const isMatch = await this.comparePasswords(password, user.password_hash);
+			if (!isMatch) throw new BadRequestException(Message.WRONG_PASSWORD);
+
+			// 4. JWT token
+			const accessToken = this.createToken({
+				id: user._id,
+				subscription_tier: user.subscription_tier,
+			});
+
+			// 5. Remove password_hash
+			const { password_hash: _, ...memberWithoutPassword } = user;
+
+			return {
+				accessToken,
+				member: memberWithoutPassword,
+			};
+		} catch (err: any) {
+			console.log('Error, AuthService.login:', err.message);
 			if (err instanceof BadRequestException) throw err;
 			throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
 		}
