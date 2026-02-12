@@ -133,6 +133,31 @@ export class ConceptService {
 		}
 	}
 
+	// deleteConcept — faqat SUPER_ADMIN
+	public async deleteConcept(id: string): Promise<{ message: string }> {
+		try {
+			const { data: existing, error: findError } = await this.databaseService.client
+				.from('ad_concepts')
+				.select('_id')
+				.eq('_id', id)
+				.single();
+
+			if (findError || !existing) {
+				throw new BadRequestException(Message.NO_DATA_FOUND);
+			}
+
+			const { error } = await this.databaseService.client.from('ad_concepts').delete().eq('_id', id);
+
+			if (error) {
+				throw new InternalServerErrorException(Message.REMOVE_FAILED);
+			}
+
+			return { message: 'Concept deleted' };
+		} catch (err) {
+			throw err;
+		}
+	}
+
 	// getRecommendedConcepts — usage_count bo'yicha top 10
 	public async getRecommendedConcepts(): Promise<{ list: AdConcept[] }> {
 		try {

@@ -28,6 +28,14 @@ export class ConceptController {
 		return this.conceptService.updateConcept(id, input);
 	}
 
+	// deleteConceptByAdmin — faqat SUPER_ADMIN
+	@UseGuards(RolesGuard)
+	@Roles(AdminRole.SUPER_ADMIN)
+	@Post('deleteConceptByAdmin/:id')
+	public async deleteConcept(@Param('id') id: string): Promise<{ message: string }> {
+		return this.conceptService.deleteConcept(id);
+	}
+
 	// getConcepts — concept library
 	@UseGuards(AuthGuard)
 	@Get('getConcepts')
