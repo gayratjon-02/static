@@ -29,8 +29,8 @@ export class RolesGuard implements CanActivate {
 			throw new ForbiddenException(Message.ACCOUNT_SUSPENDED);
 		}
 
-		// Check member_type OR admin_role
-		const hasRole = roles.includes(authMember.member_type) || roles.includes(authMember.admin_role);
+		// Check subscription_tier OR admin_role
+		const hasRole = roles.includes(authMember.subscription_tier) || roles.includes(authMember.admin_role);
 		if (!hasRole) throw new ForbiddenException(Message.ONLY_SPECIFIC_ROLES_ALLOWED);
 
 		request.authMember = authMember;

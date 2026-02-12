@@ -35,13 +35,6 @@ export enum Message {
 	PRODUCT_LIMIT_REACHED = 'You have reached the maximum number of products!',
 }
 
-/** User member types (subscription-based) */
-export enum MemberType {
-	INDIVIDUAL = 'individual',
-	BUSINESS = 'business',
-	ENTERPRISE = 'enterprise',
-}
-
 /** User account status */
 export enum MemberStatus {
 	ACTIVE = 'active',
@@ -50,12 +43,10 @@ export enum MemberStatus {
 	DELETED = 'deleted',
 }
 
-/** Auth provider type */
+/** Auth provider type (PDF: email + Google only) */
 export enum MemberAuthType {
 	EMAIL = 'email',
 	GOOGLE = 'google',
-	APPLE = 'apple',
-	FACEBOOK = 'facebook',
 }
 
 /** Admin panel roles */
@@ -65,7 +56,7 @@ export enum AdminRole {
 	SUPPORT = 'support',
 }
 
-/** Subscription tiers */
+/** Subscription tiers (user access levels) */
 export enum SubscriptionTier {
 	FREE = 'free',
 	BASIC = 'basic',
