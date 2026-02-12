@@ -58,7 +58,7 @@ export class BrandService {
 		}
 	}
 
-	// getBrands method — foydalanuvchining barcha brandlari
+	// getBrands method 
 	public async getBrands(authMember: Member, page: number, limit: number) {
 		try {
 			const offset = (page - 1) * limit;
@@ -91,7 +91,7 @@ export class BrandService {
 		}
 	}
 
-	// getBrand method — bitta brand olish
+	// getBrand method
 	public async getBrand(id: string, authMember: Member): Promise<Brand> {
 		try {
 			const { data, error } = await this.databaseService.client
@@ -148,6 +148,37 @@ export class BrandService {
 			}
 
 			return data as Brand;
+		} catch (err) {
+			throw err;
+		}
+	}
+
+	// deleteBrand method
+	public async deleteBrand(id: string, authMember: Member): Promise<{ message: string }> {
+		try {
+			// check existence
+			const { data: existing, error: findError } = await this.databaseService.client
+				.from('brands')
+				.select('_id')
+				.eq('_id', id)
+				.eq('user_id', authMember._id)
+				.single();
+
+			if (findError || !existing) {
+				throw new BadRequestException(Message.NO_DATA_FOUND);
+			}
+
+			const { error } = await this.databaseService.client
+				.from('brands')
+				.delete()
+				.eq('_id', id)
+				.eq('user_id', authMember._id);
+
+			if (error) {
+				throw new InternalServerErrorException(Message.REMOVE_FAILED);
+			}
+
+			return { message: 'Brand deleted successfully' };
 		} catch (err) {
 			throw err;
 		}

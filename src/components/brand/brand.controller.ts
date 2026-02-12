@@ -52,4 +52,14 @@ export class BrandController {
 	): Promise<Brand> {
 		return this.brandService.updateBrand(id, input, authMember);
 	}
+
+	// deleteBrand
+	@UseGuards(AuthGuard)
+	@Post('deleteBrandById/:id')
+	public async deleteBrand(
+		@Param('id') id: string,
+		@AuthMember() authMember: Member,
+	): Promise<{ message: string }> {
+		return this.brandService.deleteBrand(id, authMember);
+	}
 }
