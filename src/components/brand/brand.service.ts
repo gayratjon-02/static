@@ -88,4 +88,24 @@ export class BrandService {
 			throw err;
 		}
 	}
+
+	// getBrand method — bitta brand olish
+	public async getBrand(id: string, authMember: Member): Promise<Brand> {
+		try {
+			const { data, error } = await this.databaseService.client
+				.from('brands')
+				.select('*')
+				.eq('_id', id)
+				.eq('user_id', authMember._id)
+				.single();
+
+			if (error || !data) {
+				throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+			}
+
+			return data as Brand;
+		} catch (err) {
+			throw err;
+		}
+	}
 }
