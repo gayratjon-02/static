@@ -1,16 +1,13 @@
-
-CREATE TYPE payment_status AS ENUM (
-  'active',
-  'inactive',
-  'past_due',
-  'canceled'
-);
+-- ============================================
+-- SUBSCRIPTION & PAYMENT ENUMS
+-- PostgreSQL (Supabase)
+-- ============================================
 
 CREATE TYPE subscription_tier AS ENUM (
   'free',
   'basic',
   'pro',
-  'enterprise'
+  'agency'
 );
 
 CREATE TYPE subscription_status AS ENUM (

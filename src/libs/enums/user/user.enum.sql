@@ -1,3 +1,7 @@
+-- ============================================
+-- USER ENUMS
+-- PostgreSQL (Supabase)
+-- ============================================
 
 CREATE TYPE member_type AS ENUM (
   'individual',
