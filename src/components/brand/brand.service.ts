@@ -56,5 +56,36 @@ export class BrandService {
 		}
 	}
 
-    
+	// getBrands method — foydalanuvchining barcha brandlari
+	public async getBrands(authMember: Member, page: number, limit: number) {
+		try {
+			const offset = (page - 1) * limit;
+
+			// 1. Total count
+			const { count, error: countError } = await this.databaseService.client
+				.from('brands')
+				.select('*', { count: 'exact', head: true })
+				.eq('user_id', authMember._id);
+
+			if (countError) {
+				throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+			}
+
+			// 2. Paginated list
+			const { data, error } = await this.databaseService.client
+				.from('brands')
+				.select('*')
+				.eq('user_id', authMember._id)
+				.order('created_at', { ascending: false })
+				.range(offset, offset + limit - 1);
+
+			if (error) {
+				throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+			}
+
+			return { list: data as Brand[], total: count || 0 };
+		} catch (err) {
+			throw err;
+		}
+	}
 }

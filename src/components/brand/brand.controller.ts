@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { BrandService } from './brand.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
@@ -18,5 +18,16 @@ export class BrandController {
 		@AuthMember() authMember: Member,
 	): Promise<Brand> {
 		return this.brandService.createBrand(input, authMember);
+	}
+
+	// getBrands — 
+	@UseGuards(AuthGuard)
+	@Get('getBrands')
+	public async getBrands(
+		@AuthMember() authMember: Member,
+		@Query('page') page: string = '1',
+		@Query('limit') limit: string = '10',
+	) {
+		return this.brandService.getBrands(authMember, +page, +limit);
 	}
 }
