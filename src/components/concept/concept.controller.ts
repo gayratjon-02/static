@@ -1,10 +1,23 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ConceptService } from './concept.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { AdminRole } from '../../libs/enums/common.enum';
+import { CreateConceptDto } from '../../libs/dto/concept/create-concept.dto';
+import { AdConcept } from '../../libs/types/concept/concept.type';
 
 @Controller('concept')
 export class ConceptController {
 	constructor(private readonly conceptService: ConceptService) {}
+
+	// createConcept — admin only
+	@UseGuards(RolesGuard)
+	@Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_ADMIN)
+	@Post('createConceptByAdmin')
+	public async createConcept(@Body() input: CreateConceptDto): Promise<AdConcept> {
+		return this.conceptService.createConcept(input);
+	}
 
 	// getConcepts — concept library
 	@UseGuards(AuthGuard)
@@ -16,5 +29,12 @@ export class ConceptController {
 		@Query('limit') limit: string = '20',
 	) {
 		return this.conceptService.getConcepts(category, search, +page, +limit);
+	}
+
+	// getRecommended — usage_count bo'yicha top 10
+	@UseGuards(AuthGuard)
+	@Get('getRecommended')
+	public async getRecommendedConcepts() {
+		return this.conceptService.getRecommendedConcepts();
 	}
 }

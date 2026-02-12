@@ -4,7 +4,10 @@ import { DatabaseService } from '../../database/database.service';
 import { Message } from '../../libs/enums/common.enum';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
 import { LoginDto } from '../../libs/dto/member/login.dto';
+import { AdminSignupDto } from '../../libs/dto/admin/admin-signup.dto';
+import { AdminLoginDto } from '../../libs/dto/admin/admin-login.dto';
 import { AuthResponse } from '../../libs/types/member/member.type';
+import { AdminAuthResponse } from '../../libs/types/admin/admin.type';
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcryptjs';
 
