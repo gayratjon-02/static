@@ -1,11 +1,9 @@
 import {
 	IsString,
-	IsNotEmpty,
 	IsOptional,
 	IsArray,
 	IsBoolean,
 	IsEnum,
-	IsUrl,
 	IsNumber,
 	MaxLength,
 	ArrayMinSize,
@@ -13,32 +11,33 @@ import {
 } from 'class-validator';
 import { ConceptCategory } from '../../enums/concept/concept.enum';
 
-export class CreateConceptDto {
+export class UpdateConceptDto {
 	@IsEnum(ConceptCategory)
-	@IsNotEmpty()
-	category: ConceptCategory;
+	@IsOptional()
+	category?: ConceptCategory;
 
 	@IsString()
-	@IsNotEmpty()
+	@IsOptional()
 	@MaxLength(255)
-	name: string;
+	name?: string;
 
 	@IsString()
-	@IsNotEmpty()
-	image_url: string;
+	@IsOptional()
+	image_url?: string;
 
 	@IsArray()
+	@IsOptional()
 	@ArrayMinSize(1)
 	@IsString({ each: true })
 	@MaxLength(50, { each: true })
-	tags: string[];
+	tags?: string[];
 
 	@IsString()
-	@IsNotEmpty()
+	@IsOptional()
 	@MaxLength(500)
-	description: string;
+	description?: string;
 
-	@IsUrl()
+	@IsString()
 	@IsOptional()
 	source_url?: string;
 

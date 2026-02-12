@@ -6,6 +6,7 @@ export interface AdConcept {
 
 	// Content
 	category: ConceptCategory;
+	name: string;
 	image_url: string;
 	tags: string[];
 	description: string;

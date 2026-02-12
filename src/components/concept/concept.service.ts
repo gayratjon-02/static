@@ -1,7 +1,9 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
 import { CreateConceptDto } from '../../libs/dto/concept/create-concept.dto';
+import { UpdateConceptDto } from '../../libs/dto/concept/update-concept.dto';
 import { Message } from '../../libs/enums/common.enum';
+import { T } from '../../libs/types/common';
 import { AdConcept } from '../../libs/types/concept/concept.type';
 
 @Injectable()
@@ -19,10 +21,7 @@ export class ConceptService {
 				.select('*', { count: 'exact', head: true })
 				.eq('is_active', true);
 
-			let dataQuery = this.databaseService.client
-				.from('ad_concepts')
-				.select('*')
-				.eq('is_active', true);
+			let dataQuery = this.databaseService.client.from('ad_concepts').select('*').eq('is_active', true);
 
 			// Filter: category
 			if (category) {
@@ -65,6 +64,7 @@ export class ConceptService {
 				.from('ad_concepts')
 				.insert({
 					category: input.category,
+					name: input.name,
 					image_url: input.image_url,
 					tags: input.tags,
 					description: input.description,
@@ -77,7 +77,54 @@ export class ConceptService {
 				.single();
 
 			if (error || !data) {
+				console.log('Supabase createConcept error:', error);
 				throw new InternalServerErrorException(Message.CREATE_FAILED);
+			}
+
+			return data as AdConcept;
+		} catch (err) {
+			throw err;
+		}
+	}
+
+	// updateConcept — admin tomonidan concept tahrirlash
+	public async updateConcept(id: string, input: UpdateConceptDto): Promise<AdConcept> {
+		try {
+			// Concept mavjudligini tekshirish
+			const { data: existing, error: findError } = await this.databaseService.client
+				.from('ad_concepts')
+				.select('_id')
+				.eq('_id', id)
+				.single();
+
+			if (findError || !existing) {
+				throw new BadRequestException(Message.NO_DATA_FOUND);
+			}
+
+			const updateData: T = {};
+
+			const fields = ['category', 'name', 'image_url', 'tags', 'description', 'source_url', 'is_active', 'display_order'];
+
+			for (const field of fields) {
+				if (input[field] !== undefined) {
+					updateData[field] = input[field];
+				}
+			}
+
+			if (Object.keys(updateData).length === 0) {
+				throw new BadRequestException(Message.BAD_REQUEST);
+			}
+
+			const { data, error } = await this.databaseService.client
+				.from('ad_concepts')
+				.update(updateData)
+				.eq('_id', id)
+				.select('*')
+				.single();
+
+			if (error || !data) {
+				console.log('Supabase updateConcept error:', error);
+				throw new InternalServerErrorException(Message.UPDATE_FAILED);
 			}
 
 			return data as AdConcept;
@@ -95,7 +142,6 @@ export class ConceptService {
 				.eq('is_active', true)
 				.order('usage_count', { ascending: false })
 				.limit(10);
-
 			if (error) {
 				throw new InternalServerErrorException(Message.NO_DATA_FOUND);
 			}
@@ -106,4 +152,3 @@ export class ConceptService {
 		}
 	}
 }
-

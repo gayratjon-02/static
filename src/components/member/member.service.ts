@@ -1,8 +1,11 @@
 import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
-import { AuthResponse, Member, MemberResponse } from '../../libs/types/member/member.type';
 import { LoginDto } from 'src/libs/dto/member/login.dto';
+import { AdminSignupDto } from '../../libs/dto/admin/admin-signup.dto';
+import { AdminLoginDto } from '../../libs/dto/admin/admin-login.dto';
+import { AuthResponse, Member, MemberResponse } from '../../libs/types/member/member.type';
+import { AdminAuthResponse } from '../../libs/types/admin/admin.type';
 import { UpdateMemberDto } from '../../libs/dto/member/update-member.dto';
 import { T } from 'src/libs/types/common';
 import { DatabaseService } from '../../database/database.service';
@@ -29,6 +32,16 @@ export class MemberService {
 	// login method
 	public async login(input: LoginDto): Promise<AuthResponse> {
 		return await this.authService.login(input);
+	}
+
+	// admin signup method
+	public async adminSignup(input: AdminSignupDto): Promise<AdminAuthResponse> {
+		return await this.authService.adminSignup(input);
+	}
+
+	// admin login method
+	public async adminLogin(input: AdminLoginDto): Promise<AdminAuthResponse> {
+		return await this.authService.adminLogin(input);
 	}
 
 	//getMember method

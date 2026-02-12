@@ -22,6 +22,18 @@ export class RolesGuard implements CanActivate {
 		const token = bearerToken.split(' ')[1];
 		if (!token) throw new BadRequestException(Message.TOKEN_NOT_EXIST);
 
+		// Avval admin token sifatida tekshiramiz
+		try {
+			const adminUser = await this.authService.verifyAdminToken(token);
+			if (adminUser && roles.includes(adminUser.admin_role)) {
+				request.authMember = adminUser;
+				return true;
+			}
+		} catch {
+			// Admin token emas — oddiy user sifatida davom etamiz
+		}
+
+		// Oddiy user token sifatida tekshiramiz
 		const authMember = await this.authService.verifyToken(token);
 		if (!authMember) throw new ForbiddenException(Message.NOT_AUTHENTICATED);
 
@@ -29,8 +41,8 @@ export class RolesGuard implements CanActivate {
 			throw new ForbiddenException(Message.ACCOUNT_SUSPENDED);
 		}
 
-		// Check subscription_tier OR admin_role
-		const hasRole = roles.includes(authMember.subscription_tier) || roles.includes(authMember.admin_role);
+		// Check subscription_tier
+		const hasRole = roles.includes(authMember.subscription_tier);
 		if (!hasRole) throw new ForbiddenException(Message.ONLY_SPECIFIC_ROLES_ALLOWED);
 
 		request.authMember = authMember;

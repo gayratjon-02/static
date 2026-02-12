@@ -1,13 +1,13 @@
-/** Ad concept category types (PDF spec) */
+/** Ad concept category types (DB enum: concept_category) */
 export enum ConceptCategory {
-	PRODUCT_SHOWCASE = 'product_showcase',
+	SOCIAL_PROOF = 'social_proof',
 	BEFORE_AFTER = 'before_after',
-	TESTIMONIAL = 'testimonial',
 	FEATURE_CALLOUT = 'feature_callout',
+	LISTICLE = 'listicle',
 	COMPARISON = 'comparison',
 	UGC_STYLE = 'ugc_style',
+	EDITORIAL = 'editorial',
+	BOLD_OFFER = 'bold_offer',
+	MINIMALIST = 'minimalist',
 	LIFESTYLE = 'lifestyle',
-	STATS_DATA = 'stats_data',
-	OFFER_PROMO = 'offer_promo',
-	PROBLEM_SOLUTION = 'problem_solution',
 }

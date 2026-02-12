@@ -146,8 +146,90 @@ export class AuthService {
 		return await bcrypt.compare(password, hashedPassword);
 	}
 
+	/** Admin Signup */
+	public async adminSignup(input: AdminSignupDto): Promise<AdminAuthResponse> {
+		const { email, password, name, role } = input;
+
+		try {
+			// 1. Email uniqueness check
+			const { data: existingAdmin } = await this.databaseService.client
+				.from('admin_users')
+				.select('_id')
+				.eq('email', email)
+				.single();
+
+			if (existingAdmin) {
+				throw new BadRequestException(Message.EMAIL_ALREADY_EXISTS);
+			}
+
+			// 2. Password hash
+			const password_hash = await this.hashPassword(password);
+
+			// 3. Insert admin
+			const { data, error } = await this.databaseService.client
+				.from('admin_users')
+				.insert({ email, name, password_hash, role })
+				.select()
+				.single();
+
+			if (error || !data) throw new BadRequestException(Message.CREATE_FAILED);
+
+			// 4. JWT token (is_admin flag bilan)
+			const accessToken = this.createToken({
+				id: data._id,
+				is_admin: true,
+				admin_role: data.role,
+			});
+
+			// 5. Remove password_hash
+			const { password_hash: _, ...adminWithoutPassword } = data;
+
+			return { accessToken, admin: adminWithoutPassword };
+		} catch (err: any) {
+			console.log('Error, AuthService.adminSignup:', err.message);
+			if (err instanceof BadRequestException) throw err;
+			throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
+		}
+	}
+
+	/** Admin Login */
+	public async adminLogin(input: AdminLoginDto): Promise<AdminAuthResponse> {
+		const { email, password } = input;
+
+		try {
+			// 1. Find admin by email
+			const { data: admin, error } = await this.databaseService.client
+				.from('admin_users')
+				.select('*')
+				.eq('email', email)
+				.single();
+
+			if (error || !admin) throw new BadRequestException(Message.USER_NOT_FOUND);
+
+			// 2. Compare passwords
+			const isMatch = await this.comparePasswords(password, admin.password_hash);
+			if (!isMatch) throw new BadRequestException(Message.WRONG_PASSWORD);
+
+			// 3. JWT token
+			const accessToken = this.createToken({
+				id: admin._id,
+				is_admin: true,
+				admin_role: admin.role,
+			});
+
+			// 4. Remove password_hash
+			const { password_hash: _, ...adminWithoutPassword } = admin;
+
+			return { accessToken, admin: adminWithoutPassword };
+		} catch (err: any) {
+			console.log('Error, AuthService.adminLogin:', err.message);
+			if (err instanceof BadRequestException) throw err;
+			throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
+		}
+	}
+
 	/** create JWT token */
-	public createToken(payload: { id: string; subscription_tier: string }): string {
+	public createToken(payload: { id: string; [key: string]: any }): string {
 		const secret = this.configService.get<string>('JWT_SECRET');
 		return jwt.sign(payload, secret, { expiresIn: '30d' });
 	}
@@ -167,6 +249,32 @@ export class AuthService {
 			if (error || !data) throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
 
 			return data;
+		} catch (err) {
+			if (err instanceof UnauthorizedException) throw err;
+			throw new UnauthorizedException(Message.INVALID_TOKEN);
+		}
+	}
+
+	/** verify admin JWT token and return admin data */
+	public async verifyAdminToken(token: string): Promise<any> {
+		try {
+			const secret = this.configService.get<string>('JWT_SECRET');
+			const decoded: any = jwt.verify(token, secret);
+
+			// Admin token ekanligini tekshirish
+			if (!decoded.is_admin) throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
+
+			const { data, error } = await this.databaseService.client
+				.from('admin_users')
+				.select('*')
+				.eq('_id', decoded.id)
+				.single();
+
+			if (error || !data) throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
+
+			// password_hash ni olib tashlaymiz, admin_role qo'shamiz
+			const { password_hash: _, ...adminData } = data;
+			return { ...adminData, admin_role: data.role };
 		} catch (err) {
 			if (err instanceof UnauthorizedException) throw err;
 			throw new UnauthorizedException(Message.INVALID_TOKEN);
