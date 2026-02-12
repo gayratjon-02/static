@@ -3,6 +3,7 @@ import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module';
+import { AuthModule } from './components/auth/auth.module';
 
 @Module({
 	controllers: [AppController],
@@ -14,6 +15,8 @@ import { DatabaseModule } from './database/database.module';
 		}),
 
 		DatabaseModule,
+
+		AuthModule,
 	],
 })
 export class AppModule {}
