@@ -51,4 +51,11 @@ export class MemberController {
 	public async deleteMember(@AuthMember() authMember: Member): Promise<MemberResponse> {
 		return this.memberService.deleteMember(authMember);
 	}
+
+	// getUsage — credit va obuna holati
+	@UseGuards(AuthGuard)
+	@Get('getUsage')
+	public async getUsage(@AuthMember() authMember: Member) {
+		return this.memberService.getUsage(authMember);
+	}
 }

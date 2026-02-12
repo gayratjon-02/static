@@ -20,31 +20,55 @@ export class AuthService {
 		const { email, password, full_name, avatar_url } = input;
 
 		try {
-			// 1. Email uniqueness check
+			// 1. Email uniqueness check (faqat active/inactive userlar orasida)
 			const { data: existingUser } = await this.databaseService.client
 				.from('users')
-				.select('_id')
+				.select('_id, member_status')
 				.eq('email', email)
 				.single();
 
-			if (existingUser) throw new BadRequestException(Message.EMAIL_ALREADY_EXISTS);
+			if (existingUser && existingUser.member_status !== 'deleted') {
+				throw new BadRequestException(Message.EMAIL_ALREADY_EXISTS);
+			}
 
 			// 2. Password hash
 			const password_hash = await this.hashPassword(password);
 
-			// 3. User creation
-			const { data: newUser, error } = await this.databaseService.client
-				.from('users')
-				.insert({
-					email,
-					full_name,
-					password_hash,
-					avatar_url: avatar_url || '',
-				})
-				.select()
-				.single();
+			let newUser: any;
 
-			if (error || !newUser) throw new BadRequestException(Message.CREATE_FAILED);
+			if (existingUser && existingUser.member_status === 'deleted') {
+				// 3a. Deleted user bor — qayta aktivatsiya (reuse row)
+				const { data, error } = await this.databaseService.client
+					.from('users')
+					.update({
+						full_name,
+						password_hash,
+						avatar_url: avatar_url || '',
+						member_status: 'active',
+						updated_at: new Date(),
+					})
+					.eq('_id', existingUser._id)
+					.select()
+					.single();
+
+				if (error || !data) throw new BadRequestException(Message.CREATE_FAILED);
+				newUser = data;
+			} else {
+				// 3b. Yangi user yaratish
+				const { data, error } = await this.databaseService.client
+					.from('users')
+					.insert({
+						email,
+						full_name,
+						password_hash,
+						avatar_url: avatar_url || '',
+					})
+					.select()
+					.single();
+
+				if (error || !data) throw new BadRequestException(Message.CREATE_FAILED);
+				newUser = data;
+			}
 
 			// 4. JWT token
 			const accessToken = this.createToken({

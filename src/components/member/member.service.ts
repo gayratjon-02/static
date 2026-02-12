@@ -93,6 +93,26 @@ export class MemberService {
 		}
 	}
 
+	// getUsage method — credit va obuna holati
+	public async getUsage(authMember: Member) {
+		try {
+			const { data, error } = await this.databaseService.client
+				.from('users')
+				.select('subscription_tier, subscription_status, credits_used, credits_limit, addon_credits_remaining, billing_cycle_start, billing_cycle_end')
+				.eq('_id', authMember._id)
+				.eq('member_status', MemberStatus.ACTIVE)
+				.single();
+
+			if (error || !data) {
+				throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+			}
+
+			return data;
+		} catch (err) {
+			throw err;
+		}
+	}
+
 	// deleteMember method (soft delete — faqat status o'zgaradi)
 	public async deleteMember(authMember: Member): Promise<MemberResponse> {
 		try {
