@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { MemberService } from './member.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
 import { AuthResponse, Member, MemberResponse } from '../../libs/types/member/member.type';
@@ -41,10 +41,14 @@ export class MemberController {
 	// updateMember
 	@UseGuards(AuthGuard)
 	@Post('updateMember')
-	public async updateMember(
-		@Body() input: UpdateMemberDto,
-		@AuthMember() authMember: Member,
-	): Promise<MemberResponse> {
+	public async updateMember(@Body() input: UpdateMemberDto, @AuthMember() authMember: Member): Promise<MemberResponse> {
 		return this.memberService.updateMember(input, authMember);
+	}
+
+	// deleteMember (soft delete)
+	@UseGuards(AuthGuard)
+	@Post('deleteMember')
+	public async deleteMember(@AuthMember() authMember: Member): Promise<MemberResponse> {
+		return this.memberService.deleteMember(authMember);
 	}
 }

@@ -49,7 +49,6 @@ export class MemberService {
 		return memberWithoutPassword as MemberResponse;
 	}
 
-
 	// updateMember method
 	public async updateMember(input: UpdateMemberDto, authMember: Member): Promise<MemberResponse> {
 		try {
@@ -85,6 +84,31 @@ export class MemberService {
 
 			if (error || !data) {
 				throw new InternalServerErrorException(Message.UPDATE_FAILED);
+			}
+
+			const { password_hash, ...memberWithoutPassword } = data;
+			return memberWithoutPassword as MemberResponse;
+		} catch (err) {
+			throw err;
+		}
+	}
+
+	// deleteMember method (soft delete — faqat status o'zgaradi)
+	public async deleteMember(authMember: Member): Promise<MemberResponse> {
+		try {
+			const { data, error } = await this.databaseService.client
+				.from('users')
+				.update({
+					member_status: MemberStatus.DELETED,
+					updated_at: new Date(),
+				})
+				.eq('_id', authMember._id)
+				.eq('member_status', MemberStatus.ACTIVE)
+				.select('*')
+				.single();
+
+			if (error || !data) {
+				throw new InternalServerErrorException(Message.REMOVE_FAILED);
 			}
 
 			const { password_hash, ...memberWithoutPassword } = data;
