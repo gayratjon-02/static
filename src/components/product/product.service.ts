@@ -104,4 +104,25 @@ export class ProductService {
 			throw err;
 		}
 	}
+
+	// getProduct method — get one product
+	public async getProduct(id: string, authMember: Member): Promise<Product> {
+		try {
+			const { data, error } = await this.databaseService.client
+				.from('products')
+				.select('*, brands!inner(_id, user_id)')
+				.eq('_id', id)
+				.eq('brands.user_id', authMember._id)
+				.single();
+
+			if (error || !data) {
+				throw new BadRequestException(Message.NO_DATA_FOUND);
+			}
+
+			const { brands, ...product } = data;
+			return product as Product;
+		} catch (err) {
+			throw err;
+		}
+	}
 }

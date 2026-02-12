@@ -31,4 +31,14 @@ export class ProductController {
 	) {
 		return this.productService.getProducts(brandId, authMember, +page, +limit);
 	}
+
+	// getProduct — one product
+	@UseGuards(AuthGuard)
+	@Get('getProductById/:id')
+	public async getProduct(
+		@Param('id') id: string,
+		@AuthMember() authMember: Member,
+	): Promise<Product> {
+		return this.productService.getProduct(id, authMember);
+	}
 }
