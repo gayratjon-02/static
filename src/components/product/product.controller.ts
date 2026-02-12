@@ -1,4 +1,4 @@
-import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ProductService } from './product.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
@@ -18,5 +18,17 @@ export class ProductController {
 		@AuthMember() authMember: Member,
 	): Promise<Product> {
 		return this.productService.createProduct(input, authMember);
+	}
+
+	// getProducts — byBrandId with pagination
+	@UseGuards(AuthGuard)
+	@Get('getProducts/:brandId')
+	public async getProducts(
+		@Param('brandId') brandId: string,
+		@AuthMember() authMember: Member,
+		@Query('page') page: string = '1',
+		@Query('limit') limit: string = '10',
+	) {
+		return this.productService.getProducts(brandId, authMember, +page, +limit);
 	}
 }

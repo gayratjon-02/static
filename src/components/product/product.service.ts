@@ -59,4 +59,49 @@ export class ProductService {
 			throw err;
 		}
 	}
+
+	// getProducts method — brand bo'yicha productlar
+	public async getProducts(brandId: string, authMember: Member, page: number, limit: number) {
+		try {
+			// Brand ownership tekshirish
+			const { data: brand, error: brandError } = await this.databaseService.client
+				.from('brands')
+				.select('_id')
+				.eq('_id', brandId)
+				.eq('user_id', authMember._id)
+				.single();
+
+			if (brandError || !brand) {
+				throw new BadRequestException(Message.NO_BRAND_FOUND);
+			}
+
+			const offset = (page - 1) * limit;
+
+			// Total count
+			const { count, error: countError } = await this.databaseService.client
+				.from('products')
+				.select('*', { count: 'exact', head: true })
+				.eq('brand_id', brandId);
+
+			if (countError) {
+				throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+			}
+
+			// Paginated list
+			const { data, error } = await this.databaseService.client
+				.from('products')
+				.select('*')
+				.eq('brand_id', brandId)
+				.order('created_at', { ascending: false })
+				.range(offset, offset + limit - 1);
+
+			if (error) {
+				throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+			}
+
+			return { list: data as Product[], total: count || 0 };
+		} catch (err) {
+			throw err;
+		}
+	}
 }
