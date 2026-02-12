@@ -53,4 +53,14 @@ export class ProductController {
 	): Promise<Product> {
 		return this.productService.updateProduct(id, input, authMember);
 	}
+
+	// deleteProduct
+	@UseGuards(AuthGuard)
+	@Post('deleteProductById/:id')
+	public async deleteProduct(
+		@Param('id') id: string,
+		@AuthMember() authMember: Member,
+	): Promise<{ message: string }> {
+		return this.productService.deleteProduct(id, authMember);
+	}
 }

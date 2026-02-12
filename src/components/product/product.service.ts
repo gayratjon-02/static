@@ -180,4 +180,34 @@ export class ProductService {
 			throw err;
 		}
 	}
+
+	// deleteProduct method
+	public async deleteProduct(id: string, authMember: Member): Promise<{ message: string }> {
+		try {
+			// Ownership: product -> brand -> user_id
+			const { data: existing, error: findError } = await this.databaseService.client
+				.from('products')
+				.select('_id, brands!inner(user_id)')
+				.eq('_id', id)
+				.eq('brands.user_id', authMember._id)
+				.single();
+
+			if (findError || !existing) {
+				throw new BadRequestException(Message.NO_DATA_FOUND);
+			}
+
+			const { error } = await this.databaseService.client
+				.from('products')
+				.delete()
+				.eq('_id', id);
+
+			if (error) {
+				throw new InternalServerErrorException(Message.REMOVE_FAILED);
+			}
+
+			return { message: 'Product deleted successfully' };
+		} catch (err) {
+			throw err;
+		}
+	}
 }
