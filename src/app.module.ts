@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './components/auth/auth.module';
 import { MemberModule } from './components/member/member.module';
+import { BrandModule } from './components/brand/brand.module';
 
 @Module({
 	controllers: [AppController],
@@ -20,6 +21,8 @@ import { MemberModule } from './components/member/member.module';
 		AuthModule,
 
 		MemberModule,
+
+		BrandModule,
 	],
 })
 export class AppModule {}
