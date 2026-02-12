@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, UseGuards } from '@nestjs/common';
 import { MemberService } from './member.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
 import { AuthResponse, Member, MemberResponse } from '../../libs/types/member/member.type';
 import { LoginDto } from 'src/libs/dto/member/login.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
+import { UpdateMemberDto } from 'src/libs/dto/member/update-member.dto';
 
 @Controller('member')
 export class MemberController {
@@ -35,5 +36,15 @@ export class MemberController {
 	public async getMember(@AuthMember() authMember: Member): Promise<MemberResponse> {
 		console.log('Authenticated member:', authMember);
 		return this.memberService.getMember(authMember);
+	}
+
+	// updateMember
+	@UseGuards(AuthGuard)
+	@Post('updateMember')
+	public async updateMember(
+		@Body() input: UpdateMemberDto,
+		@AuthMember() authMember: Member,
+	): Promise<MemberResponse> {
+		return this.memberService.updateMember(input, authMember);
 	}
 }
