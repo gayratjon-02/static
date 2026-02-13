@@ -34,6 +34,13 @@ export enum Message {
 	// Brand / Product
 	BRAND_LIMIT_REACHED = 'You have reached the maximum number of brands for your tier!',
 	PRODUCT_LIMIT_REACHED = 'You have reached the maximum number of products!',
+
+	// Generation
+	GENERATION_STARTED = 'Generation started successfully!',
+	GENERATION_FAILED = 'Generation failed, please try again!',
+	BRAND_NOT_FOUND = 'Brand not found or does not belong to you!',
+	PRODUCT_NOT_FOUND = 'Product not found or does not belong to this brand!',
+	CONCEPT_NOT_FOUND = 'Concept not found!',
 }
 
 /** User account status */

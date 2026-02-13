@@ -8,6 +8,7 @@ import { MemberModule } from './components/member/member.module';
 import { BrandModule } from './components/brand/brand.module';
 import { ProductModule } from './components/product/product.module';
 import { ConceptModule } from './components/concept/concept.module';
+import { GenerationModule } from './components/generation/generation.module';
 
 @Module({
 	controllers: [AppController],
@@ -29,6 +30,8 @@ import { ConceptModule } from './components/concept/concept.module';
 		ProductModule,
 
 		ConceptModule,
+
+		GenerationModule,
 	],
 })
 export class AppModule {}

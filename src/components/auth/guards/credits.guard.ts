@@ -24,13 +24,16 @@ export class CreditsGuard implements CanActivate {
 		// Get user's current credits
 		const { data, error } = await this.databaseService.client
 			.from('users')
-			.select('credits_remaining')
-			.eq('id', user.id)
+			.select('credits_used, credits_limit, addon_credits_remaining')
+			.eq('_id', user._id)
 			.single();
 
 		if (error || !data) throw new ForbiddenException(Message.SOMETHING_WENT_WRONG);
 
-		if (data.credits_remaining < creditsRequired) {
+		const creditsRemaining =
+			(data.credits_limit - data.credits_used) + (data.addon_credits_remaining || 0);
+
+		if (creditsRemaining < creditsRequired) {
 			throw new ForbiddenException(Message.INSUFFICIENT_CREDITS);
 		}
 

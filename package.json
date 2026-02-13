@@ -20,7 +20,10 @@
 		"test:e2e": "jest --config ./test/jest-e2e.json"
 	},
 	"dependencies": {
+		"@anthropic-ai/sdk": "^0.74.0",
+		"@google/generative-ai": "^0.24.1",
 		"@nestjs/axios": "^4.0.1",
+		"@nestjs/bullmq": "^11.0.4",
 		"@nestjs/common": "^11.0.1",
 		"@nestjs/config": "^4.0.3",
 		"@nestjs/core": "^11.0.1",
@@ -31,8 +34,10 @@
 		"@supabase/supabase-js": "^2.95.3",
 		"@types/jsonwebtoken": "^9.0.10",
 		"bcryptjs": "^2.4.3",
+		"bullmq": "^5.69.1",
 		"class-transformer": "^0.5.1",
 		"class-validator": "^0.14.0",
+		"ioredis": "^5.9.3",
 		"jsonwebtoken": "^9.0.3",
 		"moment": "^2.29.4",
 		"pg": "^8.18.0",
