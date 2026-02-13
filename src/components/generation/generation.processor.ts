@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { DatabaseService } from '../../database/database.service';
 import { ClaudeService } from '../../libs/services/claude.service';
-import { GeminiService } from '../../libs/services/gemini.service';
+import { GeminiService, GeneratedImage } from '../../libs/services/gemini.service';
 import { StorageService } from '../../libs/services/storage.service';
 import { GenerationGateway } from '../../socket/generation.gateway';
 import { GenerationJobData, ClaudeResponseJson } from '../../libs/types/generation/generation.type';
@@ -56,7 +56,7 @@ export class GenerationProcessor extends WorkerHost {
 				job_id: generated_ad_id,
 				step: 'fetching_data',
 				message: 'Ma\'lumotlar yuklanmoqda...',
-				progress_percent: 10,
+				progress_percent: 5,
 			});
 
 			const [brand, product, concept] = await Promise.all([
@@ -70,7 +70,7 @@ export class GenerationProcessor extends WorkerHost {
 				job_id: generated_ad_id,
 				step: 'generating_copy',
 				message: 'AI reklama matni yozmoqda...',
-				progress_percent: 25,
+				progress_percent: 15,
 			});
 
 			const claudeResponse: ClaudeResponseJson = await this.claudeService.generateAdCopy(
@@ -80,38 +80,54 @@ export class GenerationProcessor extends WorkerHost {
 				important_notes || '',
 			);
 
-			// 5. Gemini API — rasm generatsiya (1x1)
+			// 5. Gemini API — 3 ta ratio uchun rasm generatsiya (parallel)
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
-				step: 'generating_image',
-				message: 'Rasm generatsiya qilinmoqda...',
-				progress_percent: 50,
+				step: 'generating_images',
+				message: '3 ta rasm generatsiya qilinmoqda (1x1, 9x16, 16x9)...',
+				progress_percent: 35,
 			});
 
-			const imageBuffer = await this.geminiService.generateImage(
+			const brandColors = {
+				primary: brand.primary_color,
+				secondary: brand.secondary_color,
+				accent: brand.accent_color,
+				background: brand.background_color,
+			};
+
+			const generatedImages: GeneratedImage[] = await this.geminiService.generateAllRatios(
 				claudeResponse.gemini_image_prompt,
-				{
-					primary: brand.primary_color,
-					secondary: brand.secondary_color,
-					accent: brand.accent_color,
-					background: brand.background_color,
-				},
+				brandColors,
 			);
 
-			// 6. Supabase Storage'ga yuklash
+			// 6. Supabase Storage'ga yuklash (parallel)
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'uploading',
-				message: 'Rasm saqlanmoqda...',
-				progress_percent: 75,
+				message: `${generatedImages.length} ta rasm saqlanmoqda...`,
+				progress_percent: 65,
 			});
 
-			const imageUrl = await this.storageService.uploadImage(
-				user_id,
-				generated_ad_id,
-				'1x1',
-				imageBuffer,
+			const imageUrls: Record<string, string> = {};
+
+			const uploadResults = await Promise.allSettled(
+				generatedImages.map(async (img) => {
+					const ratioKey = img.ratio.replace(':', 'x');
+					const url = await this.storageService.uploadImage(
+						user_id,
+						generated_ad_id,
+						ratioKey,
+						img.buffer,
+					);
+					imageUrls[ratioKey] = url;
+				}),
 			);
+
+			for (const result of uploadResults) {
+				if (result.status === 'rejected') {
+					this.logger.error(`Upload failed: ${result.reason?.message}`);
+				}
+			}
 
 			// 7. Ad copy (gemini_image_prompt'siz)
 			const adCopyJson = {
@@ -127,7 +143,7 @@ export class GenerationProcessor extends WorkerHost {
 				job_id: generated_ad_id,
 				step: 'saving',
 				message: 'Natijalar saqlanmoqda...',
-				progress_percent: 90,
+				progress_percent: 85,
 			});
 
 			const { error: updateError } = await this.databaseService.client
@@ -135,7 +151,9 @@ export class GenerationProcessor extends WorkerHost {
 				.update({
 					claude_response_json: claudeResponse,
 					gemini_prompt: claudeResponse.gemini_image_prompt,
-					image_url_1x1: imageUrl,
+					image_url_1x1: imageUrls['1x1'] || null,
+					image_url_9x16: imageUrls['9x16'] || null,
+					image_url_16x9: imageUrls['16x9'] || null,
 					ad_copy_json: adCopyJson,
 					generation_status: GenerationStatus.COMPLETED,
 					ad_name: `${brand.name} — ${product.name}`,
@@ -152,7 +170,6 @@ export class GenerationProcessor extends WorkerHost {
 			await this.databaseService.client.rpc('increment_usage_count', {
 				concept_id: concept_id,
 			}).then(({ error }) => {
-				// RPC mavjud bo'lmasa, manual increment
 				if (error) {
 					return this.databaseService.client
 						.from('ad_concepts')
@@ -165,17 +182,15 @@ export class GenerationProcessor extends WorkerHost {
 			this.generationGateway.emitCompleted(user_id, {
 				job_id: generated_ad_id,
 				ad_id: generated_ad_id,
-				image_url: imageUrl,
+				image_url: imageUrls['1x1'] || Object.values(imageUrls)[0] || '',
 			});
 
-			this.logger.log(`Generation completed: ${generated_ad_id}`);
+			this.logger.log(`Generation completed: ${generated_ad_id} (${Object.keys(imageUrls).length} images)`);
 		} catch (error) {
 			this.logger.error(`Generation failed: ${generated_ad_id} — ${error.message}`);
 
-			// Status → failed
 			await this.updateAdStatus(generated_ad_id, GenerationStatus.FAILED);
 
-			// WebSocket: xato
 			this.generationGateway.emitFailed(user_id, {
 				job_id: generated_ad_id,
 				error: error.message,

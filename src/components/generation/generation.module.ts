@@ -27,6 +27,7 @@ import { GenerationGateway } from '../../socket/generation.gateway';
 					host: configService.get<string>('REDIS_HOST') || 'localhost',
 					port: configService.get<number>('REDIS_PORT') || 6379,
 				},
+				prefix: 'se',
 			}),
 			inject: [ConfigService],
 		}),
@@ -44,4 +45,4 @@ import { GenerationGateway } from '../../socket/generation.gateway';
 		GenerationGateway,
 	],
 })
-export class GenerationModule {}
+export class GenerationModule { }

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
+import { DatabaseService } from '../../database/database.service';
 import { Brand } from '../types/brand/brand.type';
 import { Product } from '../types/product/product.type';
 import { AdConcept } from '../types/concept/concept.type';
@@ -11,7 +12,10 @@ export class ClaudeService {
 	private readonly logger = new Logger('ClaudeService');
 	private client: Anthropic;
 
-	constructor(private configService: ConfigService) {
+	constructor(
+		private configService: ConfigService,
+		private databaseService: DatabaseService,
+	) {
 		this.client = new Anthropic({
 			apiKey: this.configService.get<string>('ANTHROPIC_API_KEY'),
 		});
@@ -23,7 +27,7 @@ export class ClaudeService {
 		concept: AdConcept,
 		importantNotes: string,
 	): Promise<ClaudeResponseJson> {
-		const systemPrompt = this.buildSystemPrompt();
+		const systemPrompt = await this.getSystemPrompt();
 		const userPrompt = this.buildUserPrompt(brand, product, concept, importantNotes);
 
 		this.logger.log('Sending request to Claude API...');
@@ -50,7 +54,43 @@ export class ClaudeService {
 		return parsed;
 	}
 
-	private buildSystemPrompt(): string {
+	/**
+	 * DB'dan aktiv system prompt'ni oladi.
+	 * Topilmasa — fallback default prompt ishlatadi.
+	 */
+	private async getSystemPrompt(): Promise<string> {
+		try {
+			const { data, error } = await this.databaseService.client
+				.from('prompt_templates')
+				.select('content')
+				.eq('template_type', 'system')
+				.eq('is_active', true)
+				.order('version', { ascending: false })
+				.limit(1)
+				.single();
+
+			if (!error && data?.content) {
+				this.logger.log('System prompt loaded from DB');
+				return `${data.content}
+
+You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
+{
+  "headline": "Short, punchy headline (max 10 words)",
+  "subheadline": "Supporting text (max 15 words)",
+  "body_text": "Persuasive body copy (2-3 sentences)",
+  "callout_texts": ["Callout 1", "Callout 2", "Callout 3"],
+  "cta_text": "Call to action button text",
+  "gemini_image_prompt": "Extremely detailed image generation prompt including: layout, colors, text placement, product photo description, background, style, mood. Must include exact text to overlay on the image."
+}`;
+			}
+		} catch {
+			this.logger.warn('Failed to load prompt from DB, using fallback');
+		}
+
+		return this.getFallbackSystemPrompt();
+	}
+
+	private getFallbackSystemPrompt(): string {
 		return `You are an expert Facebook ad creative director with 15+ years of experience in direct response advertising. You create scroll-stopping static ad creatives that drive conversions. Your ads are on-brand, visually striking, and optimized for the Meta platform.
 
 When generating ads:
@@ -87,21 +127,27 @@ Description: ${brand.description}
 Voice & Tone: ${brand.voice_tags?.join(', ') || 'professional'}
 Target Audience: ${brand.target_audience || 'General audience'}
 Colors: Primary ${brand.primary_color}, Secondary ${brand.secondary_color}, Accent ${brand.accent_color}, Background ${brand.background_color}
+${brand.logo_url ? `Logo URL: ${brand.logo_url}` : ''}
+${brand.competitors ? `Competitors: ${brand.competitors}` : ''}
 
 === PRODUCT ===
 Name: ${product.name}
 Description: ${product.description}
 USPs: ${product.usps?.join(', ') || 'N/A'}
+${product.photo_url ? `Product Photo: ${product.photo_url}` : ''}
 Price: ${product.price_text || 'N/A'}
 Rating: ${product.star_rating ? `${product.star_rating}/5 (${product.review_count || 0} reviews)` : 'N/A'}
 ${product.offer_text ? `Offer: ${product.offer_text}` : ''}
-${product.ingredients_features ? `Features: ${product.ingredients_features}` : ''}
+${product.ingredients_features ? `Features/Ingredients: ${product.ingredients_features}` : ''}
+${product.before_description ? `Before: ${product.before_description}` : ''}
+${product.after_description ? `After: ${product.after_description}` : ''}
 
 === CONCEPT STYLE ===
 Category: ${concept.category}
 Name: ${concept.name}
 Description: ${concept.description}
 Tags: ${concept.tags?.join(', ') || 'N/A'}
+${concept.image_url ? `Reference Image: ${concept.image_url}` : ''}
 
 ${importantNotes ? `=== USER NOTES ===\n${importantNotes}` : ''}
 
@@ -109,10 +155,8 @@ Generate the ad creative as JSON. The gemini_image_prompt should be highly detai
 	}
 
 	private parseResponse(text: string): ClaudeResponseJson {
-		// JSON'ni topish — markdown code block ichida bo'lishi mumkin
 		let jsonStr = text.trim();
 
-		// ```json ... ``` ni olib tashlash
 		const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
 		if (codeBlockMatch) {
 			jsonStr = codeBlockMatch[1].trim();
@@ -120,7 +164,6 @@ Generate the ad creative as JSON. The gemini_image_prompt should be highly detai
 
 		const parsed = JSON.parse(jsonStr);
 
-		// Validate required fields
 		const required = ['headline', 'subheadline', 'body_text', 'callout_texts', 'cta_text', 'gemini_image_prompt'];
 		for (const field of required) {
 			if (!parsed[field]) {

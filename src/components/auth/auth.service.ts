@@ -16,7 +16,7 @@ export class AuthService {
 	constructor(
 		private configService: ConfigService,
 		private databaseService: DatabaseService,
-	) {}
+	) { }
 
 	/** Signup progress */
 	public async signup(input: SignupDto): Promise<AuthResponse> {
@@ -48,6 +48,9 @@ export class AuthService {
 						password_hash,
 						avatar_url: avatar_url || '',
 						member_status: 'active',
+						credits_used: 0,
+						credits_limit: 25,
+						addon_credits_remaining: 0,
 						updated_at: new Date(),
 					})
 					.eq('_id', existingUser._id)
@@ -57,7 +60,7 @@ export class AuthService {
 				if (error || !data) throw new BadRequestException(Message.CREATE_FAILED);
 				newUser = data;
 			} else {
-				// 3b. Yangi user yaratish
+				// 3b. Yangi user yaratish (Free tier: 25 credits)
 				const { data, error } = await this.databaseService.client
 					.from('users')
 					.insert({
@@ -65,6 +68,7 @@ export class AuthService {
 						full_name,
 						password_hash,
 						avatar_url: avatar_url || '',
+						credits_limit: 25,
 					})
 					.select()
 					.single();
@@ -229,7 +233,7 @@ export class AuthService {
 	}
 
 	/** create JWT token */
-	public createToken(payload: { id: string; [key: string]: any }): string {
+	public createToken(payload: { id: string;[key: string]: any }): string {
 		const secret = this.configService.get<string>('JWT_SECRET');
 		return jwt.sign(payload, secret, { expiresIn: '30d' });
 	}

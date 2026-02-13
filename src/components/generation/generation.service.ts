@@ -17,7 +17,7 @@ export class GenerationService {
 	constructor(
 		private databaseService: DatabaseService,
 		@InjectQueue('generation') private generationQueue: Queue,
-	) {}
+	) { }
 
 	public async createGeneration(input: CreateGenerationDto, authMember: Member): Promise<Generation> {
 		const { brand_id, product_id, concept_id, important_notes } = input;
@@ -81,39 +81,50 @@ export class GenerationService {
 				throw new InternalServerErrorException(Message.CREATE_FAILED);
 			}
 
-			// 5. Atomik credit yechish (race condition himoyasi — FOR UPDATE lock)
-			const { data: creditResult, error: creditError } = await this.databaseService.client
-				.rpc('deduct_credits', {
-					p_user_id: authMember._id,
-					p_amount: GENERATION_CREDIT_COST,
-				});
+			// 5. Credit yechish (direct query)
+			const { data: userData, error: userError } = await this.databaseService.client
+				.from('users')
+				.select('credits_used, credits_limit, addon_credits_remaining')
+				.eq('_id', authMember._id)
+				.single();
 
-			if (creditError || !creditResult?.success) {
-				// Credit yechilmadi — yaratilgan ad'ni o'chiramiz
-				await this.databaseService.client
-					.from('generated_ads')
-					.delete()
-					.eq('_id', generatedAd._id);
-
-				throw new BadRequestException(
-					creditResult?.error === 'INSUFFICIENT_CREDITS'
-						? Message.INSUFFICIENT_CREDITS
-						: Message.SOMETHING_WENT_WRONG,
-				);
+			if (userError || !userData) {
+				await this.databaseService.client.from('generated_ads').delete().eq('_id', generatedAd._id);
+				throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
 			}
 
-			// 6. credit_transactions jadvaliga yozish
-			await this.databaseService.client
-				.from('credit_transactions')
-				.insert({
-					user_id: authMember._id,
-					credits_amount: -GENERATION_CREDIT_COST,
-					transaction_type: 'generation',
-					reference_id: generatedAd._id,
-					reference_type: 'generated_ad',
-					balance_before: creditResult.balance_before,
-					balance_after: creditResult.balance_after,
-				});
+			const creditsRemaining =
+				(userData.credits_limit - userData.credits_used) + (userData.addon_credits_remaining || 0);
+
+			if (creditsRemaining < GENERATION_CREDIT_COST) {
+				await this.databaseService.client.from('generated_ads').delete().eq('_id', generatedAd._id);
+				throw new BadRequestException(Message.INSUFFICIENT_CREDITS);
+			}
+
+			const newCreditsUsed = userData.credits_used + GENERATION_CREDIT_COST;
+
+			const { error: updateCreditError } = await this.databaseService.client
+				.from('users')
+				.update({ credits_used: newCreditsUsed })
+				.eq('_id', authMember._id);
+
+			if (updateCreditError) {
+				await this.databaseService.client.from('generated_ads').delete().eq('_id', generatedAd._id);
+				throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
+			}
+
+			// 6. credit_transactions jadvaliga yozish (agar jadval mavjud bo'lsa)
+			await this.databaseService.client.from('credit_transactions').insert({
+				user_id: authMember._id,
+				credits_amount: -GENERATION_CREDIT_COST,
+				transaction_type: 'generation',
+				reference_id: generatedAd._id,
+				reference_type: 'generated_ad',
+				balance_before: creditsRemaining,
+				balance_after: creditsRemaining - GENERATION_CREDIT_COST,
+			}).then(({ error }) => {
+				if (error) this.logger.warn(`credit_transactions insert failed (non-blocking): ${error.message}`);
+			});
 
 			// 7. BullMQ queue'ga job qo'shish
 			const jobData: GenerationJobData = {
