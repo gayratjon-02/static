@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { GenerationController } from './generation.controller';
 import { GenerationService } from './generation.service';
@@ -15,6 +16,10 @@ import { GenerationGateway } from '../../socket/generation.gateway';
 	imports: [
 		DatabaseModule,
 		AuthModule,
+		ThrottlerModule.forRoot([{
+			ttl: 60000,
+			limit: 3,
+		}]),
 		BullModule.forRootAsync({
 			imports: [ConfigModule],
 			useFactory: (configService: ConfigService) => ({

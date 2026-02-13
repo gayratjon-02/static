@@ -32,10 +32,26 @@ export class GenerationProcessor extends WorkerHost {
 		this.logger.log(`Processing generation job: ${generated_ad_id}`);
 
 		try {
-			// 1. Status → processing
+			// 1. Job autentifikatsiya — generated_ad DB'da bormi va user_id to'g'rimi?
+			const { data: adRecord, error: adError } = await this.databaseService.client
+				.from('generated_ads')
+				.select('_id, user_id, generation_status')
+				.eq('_id', generated_ad_id)
+				.eq('user_id', user_id)
+				.single();
+
+			if (adError || !adRecord) {
+				throw new Error(`Job authentication failed: ad ${generated_ad_id} not found for user ${user_id}`);
+			}
+
+			if (adRecord.generation_status !== GenerationStatus.PENDING) {
+				throw new Error(`Invalid job state: ad ${generated_ad_id} is already ${adRecord.generation_status}`);
+			}
+
+			// 2. Status → processing
 			await this.updateAdStatus(generated_ad_id, GenerationStatus.PROCESSING);
 
-			// 2. DB'dan brand, product, concept olish
+			// 3. DB'dan brand, product, concept olish
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'fetching_data',
@@ -49,7 +65,7 @@ export class GenerationProcessor extends WorkerHost {
 				this.fetchConcept(concept_id),
 			]);
 
-			// 3. Claude API — ad copy generatsiya
+			// 4. Claude API — ad copy generatsiya
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'generating_copy',
@@ -64,7 +80,7 @@ export class GenerationProcessor extends WorkerHost {
 				important_notes || '',
 			);
 
-			// 4. Gemini API — rasm generatsiya (1x1)
+			// 5. Gemini API — rasm generatsiya (1x1)
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'generating_image',
@@ -82,7 +98,7 @@ export class GenerationProcessor extends WorkerHost {
 				},
 			);
 
-			// 5. Supabase Storage'ga yuklash
+			// 6. Supabase Storage'ga yuklash
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'uploading',
@@ -97,7 +113,7 @@ export class GenerationProcessor extends WorkerHost {
 				imageBuffer,
 			);
 
-			// 6. Ad copy (gemini_image_prompt'siz)
+			// 7. Ad copy (gemini_image_prompt'siz)
 			const adCopyJson = {
 				headline: claudeResponse.headline,
 				subheadline: claudeResponse.subheadline,
@@ -106,7 +122,7 @@ export class GenerationProcessor extends WorkerHost {
 				cta_text: claudeResponse.cta_text,
 			};
 
-			// 7. generated_ads jadvalini yangilash
+			// 8. generated_ads jadvalini yangilash
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'saving',
@@ -132,7 +148,7 @@ export class GenerationProcessor extends WorkerHost {
 				throw new Error(`Failed to update generated ad: ${updateError.message}`);
 			}
 
-			// 8. Concept usage_count++
+			// 9. Concept usage_count++
 			await this.databaseService.client.rpc('increment_usage_count', {
 				concept_id: concept_id,
 			}).then(({ error }) => {
@@ -145,7 +161,7 @@ export class GenerationProcessor extends WorkerHost {
 				}
 			});
 
-			// 9. WebSocket: tayyor!
+			// 10. WebSocket: tayyor!
 			this.generationGateway.emitCompleted(user_id, {
 				job_id: generated_ad_id,
 				ad_id: generated_ad_id,

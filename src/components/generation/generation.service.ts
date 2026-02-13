@@ -81,23 +81,28 @@ export class GenerationService {
 				throw new InternalServerErrorException(Message.CREATE_FAILED);
 			}
 
-			// 5. Credits yechish (credits_used += GENERATION_CREDIT_COST)
-			const currentCreditsUsed = authMember.credits_used || 0;
-			const { error: creditError } = await this.databaseService.client
-				.from('users')
-				.update({ credits_used: currentCreditsUsed + GENERATION_CREDIT_COST })
-				.eq('_id', authMember._id);
+			// 5. Atomik credit yechish (race condition himoyasi — FOR UPDATE lock)
+			const { data: creditResult, error: creditError } = await this.databaseService.client
+				.rpc('deduct_credits', {
+					p_user_id: authMember._id,
+					p_amount: GENERATION_CREDIT_COST,
+				});
 
-			if (creditError) {
-				this.logger.error(`Failed to deduct credits: ${creditError.message}`);
+			if (creditError || !creditResult?.success) {
+				// Credit yechilmadi — yaratilgan ad'ni o'chiramiz
+				await this.databaseService.client
+					.from('generated_ads')
+					.delete()
+					.eq('_id', generatedAd._id);
+
+				throw new BadRequestException(
+					creditResult?.error === 'INSUFFICIENT_CREDITS'
+						? Message.INSUFFICIENT_CREDITS
+						: Message.SOMETHING_WENT_WRONG,
+				);
 			}
 
 			// 6. credit_transactions jadvaliga yozish
-			const creditsLimit = authMember.credits_limit || 0;
-			const addonCredits = authMember.addon_credits_remaining || 0;
-			const balanceBefore = (creditsLimit - currentCreditsUsed) + addonCredits;
-			const balanceAfter = balanceBefore - GENERATION_CREDIT_COST;
-
 			await this.databaseService.client
 				.from('credit_transactions')
 				.insert({
@@ -106,8 +111,8 @@ export class GenerationService {
 					transaction_type: 'generation',
 					reference_id: generatedAd._id,
 					reference_type: 'generated_ad',
-					balance_before: balanceBefore,
-					balance_after: balanceAfter,
+					balance_before: creditResult.balance_before,
+					balance_after: creditResult.balance_after,
 				});
 
 			// 7. BullMQ queue'ga job qo'shish

@@ -1,4 +1,5 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { GenerationService } from './generation.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { CreditsGuard } from '../auth/guards/credits.guard';
@@ -12,13 +13,14 @@ import { Generation } from '../../libs/types/generation/generation.type';
 export class GenerationController {
 	constructor(private readonly generationService: GenerationService) {}
 
-	@UseGuards(AuthGuard, CreditsGuard)
+	@UseGuards(ThrottlerGuard, AuthGuard, CreditsGuard)
+	@Throttle({ default: { ttl: 60000, limit: 3 } })
 	@RequireCredits(5)
 	@Post('createGeneration')
 	public async createGeneration(
 		@Body() input: CreateGenerationDto,
 		@AuthMember() authMember: Member,
-	):Promise<Generation> {
+	): Promise<Generation> {
 		return this.generationService.createGeneration(input, authMember);
 	}
 }
