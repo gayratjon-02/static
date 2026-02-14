@@ -1,4 +1,20 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+	Body,
+	Controller,
+	Get,
+	Param,
+	Post,
+	Query,
+	UploadedFile,
+	UseGuards,
+	UseInterceptors,
+	BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 import { ConceptService } from './concept.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -8,9 +24,48 @@ import { CreateConceptDto } from '../../libs/dto/concept/create-concept.dto';
 import { UpdateConceptDto } from '../../libs/dto/concept/update-concept.dto';
 import { AdConcept } from '../../libs/types/concept/concept.type';
 
+// Ensure uploads/concepts directory exists
+const CONCEPTS_UPLOAD_DIR = join(process.cwd(), 'uploads', 'concepts');
+if (!existsSync(CONCEPTS_UPLOAD_DIR)) {
+	mkdirSync(CONCEPTS_UPLOAD_DIR, { recursive: true });
+}
+
 @Controller('concept')
 export class ConceptController {
-	constructor(private readonly conceptService: ConceptService) {}
+	constructor(private readonly conceptService: ConceptService) { }
+
+	// uploadImage — concept image upload (admin only)
+	@UseGuards(RolesGuard)
+	@Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_ADMIN)
+	@Post('uploadImage')
+	@UseInterceptors(
+		FileInterceptor('image', {
+			storage: diskStorage({
+				destination: (_req, _file, cb) => cb(null, CONCEPTS_UPLOAD_DIR),
+				filename: (_req, file, cb) => {
+					const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
+					cb(null, uniqueName);
+				},
+			}),
+			limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+			fileFilter: (_req, file, cb) => {
+				const allowed = /\.(png|jpg|jpeg|webp)$/i;
+				if (!allowed.test(extname(file.originalname))) {
+					return cb(new BadRequestException('Only PNG, JPG, JPEG, WEBP files are allowed'), false);
+				}
+				cb(null, true);
+			},
+		}),
+	)
+	public async uploadImage(
+		@UploadedFile() file: Express.Multer.File,
+	) {
+		if (!file) {
+			throw new BadRequestException('No file uploaded');
+		}
+		const imageUrl = `/uploads/concepts/${file.filename}`;
+		return { image_url: imageUrl };
+	}
 
 	// createConcept — admin only
 	@UseGuards(RolesGuard)
