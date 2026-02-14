@@ -1,0 +1,72 @@
+services:
+  romimi-backend:
+    container_name: static-engine
+    build: .
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "4007:5007" # SERVER:CONTAINER - Backend runs on 5007 inside, exposed on 4007
+    environment:
+      NODE_ENV: production
+      PORT_API: 5007
+
+      DATABASE_URL: ${DATABASE_URL}
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: 0
+
+      # AI Keys
+      CLAUDE_API_KEY: ${ANTHROPIC_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-pro-image-preview}
+
+      # Auth
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 7d
+      SECRET_TOKEN: ${JWT_SECRET}
+
+      # CORS - Frontend runs on port 4000
+      FRONTEND_URL: ${FRONTEND_URL:-http://167.172.90.235:4007}
+
+      # File Uploads - Backend runs on port 4001
+      # NOTE: Inside container, use localhost:5001 to access own files
+      FILE_STORAGE_PROVIDER: local
+      UPLOAD_LOCAL_PATH: uploads
+      # External URL for frontend to display images
+      UPLOAD_BASE_URL: ${UPLOAD_BASE_URL:-http://167.172.90.235:4007}
+      UPLOAD_MAX_FILE_SIZE: 5242880
+      UPLOAD_ALLOWED_MIME_TYPES: image/jpeg,image/png,image/webp
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+
+    depends_on:
+      - redis
+    networks:
+      - backend-network
+
+  redis:
+    container_name: static-engine-redis
+    image: redis:7-alpine
+    restart: always
+    command: >
+      sh -c "redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}"
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend-network
+
+volumes:
+  redis_data:
+
+
+networks:
+  backend-network:
+    driver: bridge
