@@ -1,15 +1,15 @@
 services:
-  romimi-backend:
+  static-engine-backend:
     container_name: static-engine
     build: .
     restart: always
     env_file:
       - .env
     ports:
-      - "4007:5007" # SERVER:CONTAINER - Backend runs on 5007 inside, exposed on 4007
+      - "4009:5009"
     environment:
       NODE_ENV: production
-      PORT_API: 5007
+      PORT_API: 5009
 
       DATABASE_URL: ${DATABASE_URL}
 
@@ -29,15 +29,13 @@ services:
       JWT_EXPIRES_IN: 7d
       SECRET_TOKEN: ${JWT_SECRET}
 
-      # CORS - Frontend runs on port 4000
-      FRONTEND_URL: ${FRONTEND_URL:-http://167.172.90.235:4007}
+      # CORS
+      FRONTEND_URL: ${FRONTEND_URL:-http://167.172.90.235:4010}
 
-      # File Uploads - Backend runs on port 4001
-      # NOTE: Inside container, use localhost:5001 to access own files
+      # File Uploads
       FILE_STORAGE_PROVIDER: local
       UPLOAD_LOCAL_PATH: uploads
-      # External URL for frontend to display images
-      UPLOAD_BASE_URL: ${UPLOAD_BASE_URL:-http://167.172.90.235:4007}
+      UPLOAD_BASE_URL: ${UPLOAD_BASE_URL:-http://167.172.90.235:4009}
       UPLOAD_MAX_FILE_SIZE: 5242880
       UPLOAD_ALLOWED_MIME_TYPES: image/jpeg,image/png,image/webp
 

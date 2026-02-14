@@ -1,14 +1,8 @@
 #!/bin/bash
+set -e
 
 git reset --hard
 git pull origin master
-
-
-docker stop static-engine
-docker rm static-engine
-
-
-set -e
 
 echo "🚀 STATIC-ENGINE Backend Docker deployment started..."
 
@@ -24,7 +18,7 @@ echo "🧹 Stopping old containers..."
 docker compose down
 
 echo "🔨 Building Docker image..."
-docker compose build
+docker compose build --no-cache
 
 echo "▶️  Starting containers..."
 docker compose up -d
@@ -36,15 +30,12 @@ echo "📊 Container status:"
 docker compose ps
 
 echo "✅ Backend deployment finished!"
-echo "🌐 Backend is running at http://localhost:4001"
+echo "🌐 Backend is running at http://localhost:4009"
 echo ""
 echo "📝 Useful commands:"
 echo "   docker compose logs -f static-engine  - View backend logs"
 echo "   docker compose logs -f redis           - View Redis logs"
-echo "   docker compose logs -f postgres        - PostgreSQL logs"
 echo "   docker compose ps                      - Container status"
 echo "   docker compose down                    - Stop all containers"
 
 docker compose logs --tail 200 -f
-
-
