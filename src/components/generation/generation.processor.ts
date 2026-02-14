@@ -65,11 +65,11 @@ export class GenerationProcessor extends WorkerHost {
 				this.fetchConcept(concept_id),
 			]);
 
-			// 4. Claude API — ad copy generatsiya
+			// 4. Claude API — ad copy generation
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'generating_copy',
-				message: 'AI reklama matni yozmoqda...',
+				message: 'AI ad copy is generating...',
 				progress_percent: 15,
 			});
 
@@ -84,7 +84,7 @@ export class GenerationProcessor extends WorkerHost {
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'generating_images',
-				message: '3 ta rasm generatsiya qilinmoqda (1x1, 9x16, 16x9)...',
+				message: '3  image is being generated (1x1, 9x16, 16x9)...',
 				progress_percent: 35,
 			});
 
