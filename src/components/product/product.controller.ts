@@ -1,4 +1,20 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+	Body,
+	Controller,
+	Get,
+	Param,
+	Post,
+	Query,
+	UploadedFile,
+	UseGuards,
+	UseInterceptors,
+	BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
+import { existsSync, mkdirSync } from 'fs';
+import { v4 as uuidv4 } from 'uuid';
 import { ProductService } from './product.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
@@ -7,9 +23,49 @@ import { UpdateProductDto } from '../../libs/dto/product/update-product.dto';
 import { Product } from '../../libs/types/product/product.type';
 import { Member } from '../../libs/types/member/member.type';
 
+// Ensure uploads/products directory exists
+const PRODUCTS_UPLOAD_DIR = join(process.cwd(), 'uploads', 'products');
+if (!existsSync(PRODUCTS_UPLOAD_DIR)) {
+	mkdirSync(PRODUCTS_UPLOAD_DIR, { recursive: true });
+}
+
 @Controller('product')
 export class ProductController {
-	constructor(private readonly productService: ProductService) {}
+	constructor(private readonly productService: ProductService) { }
+
+	// uploadPhoto — file upload for product photo
+	@UseGuards(AuthGuard)
+	@Post('uploadPhoto')
+	@UseInterceptors(
+		FileInterceptor('photo', {
+			storage: diskStorage({
+				destination: (_req, _file, cb) => cb(null, PRODUCTS_UPLOAD_DIR),
+				filename: (_req, file, cb) => {
+					const uniqueName = `${uuidv4()}${extname(file.originalname)}`;
+					cb(null, uniqueName);
+				},
+			}),
+			limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+			fileFilter: (_req, file, cb) => {
+				const allowed = /\.(png|jpg|jpeg|webp)$/i;
+				if (!allowed.test(extname(file.originalname))) {
+					return cb(new BadRequestException('Only PNG, JPG, JPEG, WEBP files are allowed'), false);
+				}
+				cb(null, true);
+			},
+		}),
+	)
+	public async uploadPhoto(
+		@UploadedFile() file: Express.Multer.File,
+		@AuthMember() authMember: Member,
+	) {
+		if (!file) {
+			throw new BadRequestException('No file uploaded');
+		}
+
+		const photoUrl = `/uploads/products/${file.filename}`;
+		return { photo_url: photoUrl };
+	}
 
 	// createProduct
 	@UseGuards(AuthGuard)
@@ -64,3 +120,4 @@ export class ProductController {
 		return this.productService.deleteProduct(id, authMember);
 	}
 }
+
