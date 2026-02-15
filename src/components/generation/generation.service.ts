@@ -7,7 +7,7 @@ import { FixErrorsDto } from '../../libs/dto/generation/fix-errors.dto';
 import { Message } from '../../libs/enums/common.enum';
 import { GenerationStatus } from '../../libs/enums/generation/generation.enum';
 import { Member } from '../../libs/types/member/member.type';
-import { Generation, GenerationJobData, GenerationStatusResponse, GenerationResultsResponse, FixErrorsJobData } from '../../libs/types/generation/generation.type';
+import { Generation, GenerationJobData, GenerationStatusResponse, GenerationResultsResponse, FixErrorsJobData, ExportRatiosResponse } from '../../libs/types/generation/generation.type';
 
 const GENERATION_CREDIT_COST = 5;
 const FIX_ERRORS_CREDIT_COST = 2;
@@ -405,6 +405,33 @@ export class GenerationService {
 			job_id: newAd._id,
 			status: GenerationStatus.PENDING,
 			message: Message.GENERATION_STARTED,
+		};
+	}
+
+	public async exportRatios(adId: string, authMember: Member): Promise<ExportRatiosResponse> {
+		const { data, error } = await this.databaseService.client
+			.from('generated_ads')
+			.select('_id, ad_name, generation_status, image_url_1x1, image_url_9x16, image_url_16x9')
+			.eq('_id', adId)
+			.eq('user_id', authMember._id)
+			.single();
+
+		if (error || !data) {
+			throw new BadRequestException(Message.GENERATION_NOT_FOUND);
+		}
+
+		if (data.generation_status !== GenerationStatus.COMPLETED) {
+			throw new BadRequestException(Message.GENERATION_NOT_COMPLETED);
+		}
+
+		return {
+			_id: data._id,
+			ad_name: data.ad_name,
+			ratios: [
+				{ ratio: '1:1', label: 'Feed (1080×1080)', image_url: data.image_url_1x1 },
+				{ ratio: '9:16', label: 'Story / Reel (1080×1920)', image_url: data.image_url_9x16 },
+				{ ratio: '16:9', label: 'Landscape (1920×1080)', image_url: data.image_url_16x9 },
+			],
 		};
 	}
 }

@@ -8,7 +8,7 @@ import { RequireCredits } from '../auth/decorators/credits.decorator';
 import { CreateGenerationDto } from '../../libs/dto/generation/create-generation.dto';
 import { FixErrorsDto } from '../../libs/dto/generation/fix-errors.dto';
 import { Member } from '../../libs/types/member/member.type';
-import { Generation, GenerationStatusResponse, GenerationResultsResponse } from '../../libs/types/generation/generation.type';
+import { Generation, GenerationStatusResponse, GenerationResultsResponse, ExportRatiosResponse } from '../../libs/types/generation/generation.type';
 
 @Controller('generation')
 export class GenerationController {
@@ -62,5 +62,14 @@ export class GenerationController {
 		@AuthMember() authMember: Member,
 	): Promise<Generation> {
 		return this.generationService.regenerateSingle(adId, authMember);
+	}
+
+	@UseGuards(AuthGuard)
+	@Post('exportRatios/:adId')
+	public async exportRatios(
+		@Param('adId') adId: string,
+		@AuthMember() authMember: Member,
+	): Promise<ExportRatiosResponse> {
+		return this.generationService.exportRatios(adId, authMember);
 	}
 }

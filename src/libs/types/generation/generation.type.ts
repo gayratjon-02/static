@@ -95,6 +95,17 @@ export interface GenerationResultsResponse {
 	created_at: Date;
 }
 
+/** exportRatios endpoint response */
+export interface ExportRatiosResponse {
+	_id: string;
+	ad_name: string | null;
+	ratios: {
+		ratio: string;
+		label: string;
+		image_url: string | null;
+	}[];
+}
+
 /** BullMQ job'ga yuboriladigan data */
 export interface GenerationJobData {
 	user_id: string;
