@@ -104,3 +104,11 @@ export interface GenerationJobData {
 	important_notes: string;
 	generated_ad_id: string;
 }
+
+/** BullMQ fix-errors job data */
+export interface FixErrorsJobData {
+	user_id: string;
+	original_ad_id: string;
+	new_ad_id: string;
+	error_description: string;
+}

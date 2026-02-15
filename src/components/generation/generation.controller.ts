@@ -6,6 +6,7 @@ import { CreditsGuard } from '../auth/guards/credits.guard';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { RequireCredits } from '../auth/decorators/credits.decorator';
 import { CreateGenerationDto } from '../../libs/dto/generation/create-generation.dto';
+import { FixErrorsDto } from '../../libs/dto/generation/fix-errors.dto';
 import { Member } from '../../libs/types/member/member.type';
 import { Generation, GenerationStatusResponse, GenerationResultsResponse } from '../../libs/types/generation/generation.type';
 
@@ -40,5 +41,16 @@ export class GenerationController {
 		@AuthMember() authMember: Member,
 	): Promise<GenerationResultsResponse> {
 		return this.generationService.getResults(jobId, authMember);
+	}
+
+	@UseGuards(AuthGuard, CreditsGuard)
+	@RequireCredits(2)
+	@Post('fixErrors/:adId')
+	public async fixErrors(
+		@Param('adId') adId: string,
+		@Body() input: FixErrorsDto,
+		@AuthMember() authMember: Member,
+	): Promise<Generation> {
+		return this.generationService.fixErrors(adId, input, authMember);
 	}
 }

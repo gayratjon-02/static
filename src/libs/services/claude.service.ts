@@ -55,6 +55,61 @@ export class ClaudeService {
 	}
 
 	/**
+	 * Fix-Errors: original ad data + error description → yangilangan Gemini prompt
+	 */
+	async fixAdErrors(
+		originalAdCopy: ClaudeResponseJson,
+		errorDescription: string,
+	): Promise<ClaudeResponseJson> {
+		const systemPrompt = `You are an expert Facebook ad creative director. You are fixing errors in a previously generated ad image. The user has described the issues. Your task is to generate an improved version that fixes the reported problems while keeping the same brand message and style.
+
+You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
+{
+  "headline": "Short, punchy headline (max 10 words)",
+  "subheadline": "Supporting text (max 15 words)",
+  "body_text": "Persuasive body copy (2-3 sentences)",
+  "callout_texts": ["Callout 1", "Callout 2", "Callout 3"],
+  "cta_text": "Call to action button text",
+  "gemini_image_prompt": "Extremely detailed and IMPROVED image generation prompt that fixes the reported issues. Be more specific about layout, text positioning, product placement, and visual quality."
+}`;
+
+		const userPrompt = `Fix the following ad creative that has issues.
+
+=== ORIGINAL AD COPY ===
+Headline: ${originalAdCopy.headline}
+Subheadline: ${originalAdCopy.subheadline}
+Body: ${originalAdCopy.body_text}
+Callouts: ${originalAdCopy.callout_texts.join(', ')}
+CTA: ${originalAdCopy.cta_text}
+
+=== ORIGINAL GEMINI IMAGE PROMPT ===
+${originalAdCopy.gemini_image_prompt}
+
+=== USER-REPORTED ISSUES ===
+${errorDescription || 'General quality issues — improve text clarity, product placement, and visual consistency.'}
+
+Generate an improved version. Keep the same ad copy/messaging but create a much better gemini_image_prompt that specifically addresses the reported issues. Be very precise about text positioning, font sizes, and layout to avoid rendering errors.`;
+
+		this.logger.log('Sending fix-errors request to Claude API...');
+
+		const response = await this.client.messages.create({
+			model: 'claude-sonnet-4-5-20250929',
+			max_tokens: 2000,
+			messages: [{ role: 'user', content: userPrompt }],
+			system: systemPrompt,
+		});
+
+		const textContent = response.content.find((block) => block.type === 'text');
+		if (!textContent || textContent.type !== 'text') {
+			throw new Error('Claude API did not return text content for fix-errors');
+		}
+
+		const parsed = this.parseResponse(textContent.text);
+		this.logger.log('Claude fix-errors response parsed successfully');
+		return parsed;
+	}
+
+	/**
 	 * DB'dan aktiv system prompt'ni oladi.
 	 * Topilmasa — fallback default prompt ishlatadi.
 	 */
