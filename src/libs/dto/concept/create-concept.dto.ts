@@ -34,9 +34,9 @@ export class CreateConceptDto {
 	tags: string[];
 
 	@IsString()
-	@IsNotEmpty()
+	@IsOptional()
 	@MaxLength(500)
-	description: string;
+	description?: string;
 
 	@IsUrl()
 	@IsOptional()
