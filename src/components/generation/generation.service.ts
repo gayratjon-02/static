@@ -3,6 +3,7 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { DatabaseService } from '../../database/database.service';
 import { CreateGenerationDto } from '../../libs/dto/generation/create-generation.dto';
+import { GetGenerationsDto } from '../../libs/dto/generation/get-generations.dto';
 import { FixErrorsDto } from '../../libs/dto/generation/fix-errors.dto';
 import { Message } from '../../libs/enums/common.enum';
 import { GenerationStatus } from '../../libs/enums/generation/generation.enum';
@@ -467,5 +468,131 @@ export class GenerationService {
 			brand_name: brandMap.get(ad.brand_id) || 'Unknown Brand',
 			concept_name: conceptMap.get(ad.concept_id) || 'Unknown Concept',
 		}));
+	}
+	public async findAll(query: GetGenerationsDto, authMember: Member) {
+		const { page = 1, limit = 50, search, brand_id, product_id, concept_id, sort_by } = query;
+		const offset = (page - 1) * limit;
+
+		let queryBuilder = this.databaseService.client
+			.from('generated_ads')
+			.select('_id, ad_name, image_url_1x1, created_at, brand_id, concept_id, product_id, generation_status', { count: 'exact' })
+			.eq('user_id', authMember._id)
+			.eq('generation_status', GenerationStatus.COMPLETED);
+
+		// Filters
+		if (brand_id) queryBuilder = queryBuilder.eq('brand_id', brand_id);
+		if (product_id) queryBuilder = queryBuilder.eq('product_id', product_id);
+		if (concept_id) queryBuilder = queryBuilder.eq('concept_id', concept_id);
+		if (search) queryBuilder = queryBuilder.ilike('ad_name', `%${search}%`);
+
+		// Sorting
+		if (sort_by === 'oldest') {
+			queryBuilder = queryBuilder.order('created_at', { ascending: true });
+		} else if (sort_by === 'brand') {
+			// Brand sorting is complex without join, fallback to created_at or needs advanced query
+			// For now, let's keep it simple or implement in-memory sort if list is small, 
+			// but better to default to created_at desc if unknown
+			queryBuilder = queryBuilder.order('created_at', { ascending: false });
+		} else {
+			// Default newest
+			queryBuilder = queryBuilder.order('created_at', { ascending: false });
+		}
+
+		// Pagination
+		const { data, error, count } = await queryBuilder.range(offset, offset + limit - 1);
+
+		if (error) throw new InternalServerErrorException(Message.SOMETHING_WENT_WRONG);
+		if (!data || data.length === 0) return { list: [], total: 0 };
+
+		// Fetch related data
+		const brandIds = [...new Set(data.map(d => d.brand_id))];
+		const productIds = [...new Set(data.map(d => d.product_id))];
+		const conceptIds = [...new Set(data.map(d => d.concept_id))];
+
+		const [brandsRes, productsRes, conceptsRes] = await Promise.all([
+			this.databaseService.client.from('brands').select('_id, brand_name, brand_colors').in('_id', brandIds),
+			this.databaseService.client.from('products').select('_id, product_name').in('_id', productIds),
+			this.databaseService.client.from('ad_concepts').select('_id, label').in('_id', conceptIds),
+		]);
+
+		const brandMap = new Map(brandsRes.data?.map(b => [b._id, { name: b.brand_name, color: b.brand_colors?.[0] || '#3ECFCF' }]));
+		const productMap = new Map(productsRes.data?.map(p => [p._id, p.product_name]));
+		const conceptMap = new Map(conceptsRes.data?.map(c => [c._id, c.label]));
+
+		const list = data.map(ad => {
+			const brand = brandMap.get(ad.brand_id);
+			return {
+				_id: ad._id,
+				name: ad.ad_name,
+				image: ad.image_url_1x1,
+				created_at: ad.created_at,
+				brand_name: brand?.name || 'Unknown',
+				brand_color: brand?.color || '#3ECFCF',
+				product_name: productMap.get(ad.product_id) || 'Unknown',
+				concept_name: conceptMap.get(ad.concept_id) || 'Unknown',
+				ratios: ['1:1', '9:16', '16:9'], // Assuming all are generated
+				canva_status: 'none', // Placeholder for now
+			};
+		});
+
+		return { list, total: count || 0 };
+	}
+
+
+	public async getLibraryCounts(authMember: Member) {
+		// 1. Get all brands with counts
+		const { data: brands, error: brandError } = await this.databaseService.client
+			.from('brands')
+			.select('_id, brand_name, brand_colors')
+			.eq('user_id', authMember._id);
+
+		// 2. Get all products with counts
+		const { data: products, error: productError } = await this.databaseService.client
+			.from('products')
+			.select('_id, product_name, brand_id')
+			.eq('brand_id', brands?.map(b => b._id) || []); // Only products for user's brands
+
+		if (brandError || productError) throw new InternalServerErrorException(Message.SOMETHING_WENT_WRONG);
+
+		// 3. Count ads per brand & product
+		// Note: Supabase doesn't support complex aggregation in one go easily without RPC. 
+		// For now, we'll fetch ad counts with a separate query or GroupBy if possible.
+		// Optimized: Get all ads (just IDs) for this user to count in memory if count is < 1000. 
+		// For larger datasets, use RPC. Assuming small scale for now (< 10k ads).
+
+		const { data: ads } = await this.databaseService.client
+			.from('generated_ads')
+			.select('brand_id, product_id')
+			.eq('user_id', authMember._id)
+			.eq('generation_status', GenerationStatus.COMPLETED);
+
+		const brandCounts: Record<string, number> = {};
+		const productCounts: Record<string, number> = {};
+
+		ads?.forEach(ad => {
+			brandCounts[ad.brand_id] = (brandCounts[ad.brand_id] || 0) + 1;
+			productCounts[ad.product_id] = (productCounts[ad.product_id] || 0) + 1;
+		});
+
+		const brandsWithCount = brands?.map(b => ({
+			_id: b._id,
+			name: b.brand_name,
+			color: b.brand_colors?.[0] || '#3ECFCF',
+			count: brandCounts[b._id] || 0
+		})).filter(b => b.count > 0) || [];
+		// Should we show brands with 0 ads? Design implies "All Brands 16", "Bron 24" -> likely implies existing ads.
+		// Let's return all brands but sort by count desc
+
+		const productsWithCount = products?.map(p => ({
+			_id: p._id,
+			name: p.product_name,
+			count: productCounts[p._id] || 0
+		})).filter(p => p.count > 0) || [];
+
+		return {
+			brands: brandsWithCount.sort((a, b) => b.count - a.count),
+			products: productsWithCount.sort((a, b) => b.count - a.count),
+			total_ads: ads?.length || 0
+		};
 	}
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { GenerationService } from './generation.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -6,6 +6,7 @@ import { CreditsGuard } from '../auth/guards/credits.guard';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { RequireCredits } from '../auth/decorators/credits.decorator';
 import { CreateGenerationDto } from '../../libs/dto/generation/create-generation.dto';
+import { GetGenerationsDto } from '../../libs/dto/generation/get-generations.dto';
 import { FixErrorsDto } from '../../libs/dto/generation/fix-errors.dto';
 import { Member } from '../../libs/types/member/member.type';
 import { Generation, GenerationStatusResponse, GenerationResultsResponse, ExportRatiosResponse } from '../../libs/types/generation/generation.type';
@@ -79,5 +80,22 @@ export class GenerationController {
 		@AuthMember() authMember: Member,
 	): Promise<any[]> {
 		return this.generationService.getRecent(authMember);
+	}
+
+	@UseGuards(AuthGuard)
+	@Get('list')
+	public async getList(
+		@Query() query: GetGenerationsDto,
+		@AuthMember() authMember: Member,
+	): Promise<any> {
+		return this.generationService.findAll(query, authMember);
+	}
+
+	@UseGuards(AuthGuard)
+	@Get('counts')
+	public async getCounts(
+		@AuthMember() authMember: Member,
+	): Promise<any> {
+		return this.generationService.getLibraryCounts(authMember);
 	}
 }
