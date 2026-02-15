@@ -17,7 +17,7 @@ export class MemberService {
 	constructor(
 		private authService: AuthService,
 		private databaseService: DatabaseService,
-	) {}
+	) { }
 
 	// test method
 	public async testMethod() {
@@ -107,20 +107,44 @@ export class MemberService {
 	}
 
 	// getUsage method — credit va obuna holati
+	// getUsage method — credit va obuna holati
 	public async getUsage(authMember: Member) {
 		try {
-			const { data, error } = await this.databaseService.client
+			// 1. User subscription & credits
+			const userPromise = this.databaseService.client
 				.from('users')
 				.select('subscription_tier, subscription_status, credits_used, credits_limit, addon_credits_remaining, billing_cycle_start, billing_cycle_end')
 				.eq('_id', authMember._id)
 				.eq('member_status', MemberStatus.ACTIVE)
 				.single();
 
-			if (error || !data) {
+			// 2. Stats: ads generated (all time)
+			const generatedPromise = this.databaseService.client
+				.from('generated_ads')
+				.select('*', { count: 'exact', head: true })
+				.eq('user_id', authMember._id);
+
+			// 3. Stats: ads saved
+			const savedPromise = this.databaseService.client
+				.from('generated_ads')
+				.select('*', { count: 'exact', head: true })
+				.eq('user_id', authMember._id)
+				.eq('is_saved', true);
+
+			const [userRes, generatedRes, savedRes] = await Promise.all([userPromise, generatedPromise, savedPromise]);
+
+			if (userRes.error || !userRes.data) {
 				throw new InternalServerErrorException(Message.NO_DATA_FOUND);
 			}
 
-			return data;
+			return {
+				...userRes.data,
+				stats: {
+					ads_generated: generatedRes.count || 0,
+					ads_saved: savedRes.count || 0,
+					canva_templates: 0, // Placeholder for now
+				}
+			};
 		} catch (err) {
 			throw err;
 		}

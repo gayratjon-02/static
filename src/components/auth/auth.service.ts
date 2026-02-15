@@ -20,7 +20,17 @@ export class AuthService {
 
 	/** Signup progress */
 	public async signup(input: SignupDto): Promise<AuthResponse> {
-		const { email, password, full_name, avatar_url } = input;
+		const { email, password, full_name, avatar_url, subscription_tier } = input;
+
+		// Map tier → credits
+		const tierCreditsMap: Record<string, number> = {
+			free: 25,
+			starter: 250,
+			pro: 750,
+			growth_engine: 2000,
+		};
+		const tier = subscription_tier || 'free';
+		const creditsLimit = tierCreditsMap[tier] || 25;
 
 		try {
 			// 1. Email uniqueness check (faqat active/inactive userlar orasida)
@@ -48,8 +58,9 @@ export class AuthService {
 						password_hash,
 						avatar_url: avatar_url || '',
 						member_status: 'active',
+						subscription_tier: tier,
 						credits_used: 0,
-						credits_limit: 25,
+						credits_limit: creditsLimit,
 						addon_credits_remaining: 0,
 						updated_at: new Date(),
 					})
@@ -68,7 +79,8 @@ export class AuthService {
 						full_name,
 						password_hash,
 						avatar_url: avatar_url || '',
-						credits_limit: 25,
+						subscription_tier: tier,
+						credits_limit: creditsLimit,
 					})
 					.select()
 					.single();

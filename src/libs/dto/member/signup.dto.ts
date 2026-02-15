@@ -1,4 +1,5 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength, MaxLength, IsOptional } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, MaxLength, IsOptional, IsEnum } from 'class-validator';
+import { SubscriptionTier } from '../../enums/common.enum';
 
 export class SignupDto {
 	@IsEmail()
@@ -20,4 +21,8 @@ export class SignupDto {
 	@IsString()
 	@IsOptional()
 	avatar_url?: string;
+
+	@IsEnum(SubscriptionTier)
+	@IsOptional()
+	subscription_tier?: SubscriptionTier;
 }
