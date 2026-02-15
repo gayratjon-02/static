@@ -7,7 +7,7 @@ import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { RequireCredits } from '../auth/decorators/credits.decorator';
 import { CreateGenerationDto } from '../../libs/dto/generation/create-generation.dto';
 import { Member } from '../../libs/types/member/member.type';
-import { Generation, GenerationStatusResponse } from '../../libs/types/generation/generation.type';
+import { Generation, GenerationStatusResponse, GenerationResultsResponse } from '../../libs/types/generation/generation.type';
 
 @Controller('generation')
 export class GenerationController {
@@ -31,5 +31,14 @@ export class GenerationController {
 		@AuthMember() authMember: Member,
 	): Promise<GenerationStatusResponse> {
 		return this.generationService.getStatus(jobId, authMember);
+	}
+
+	@UseGuards(AuthGuard)
+	@Get('getResults/:jobId')
+	public async getResults(
+		@Param('jobId') jobId: string,
+		@AuthMember() authMember: Member,
+	): Promise<GenerationResultsResponse> {
+		return this.generationService.getResults(jobId, authMember);
 	}
 }

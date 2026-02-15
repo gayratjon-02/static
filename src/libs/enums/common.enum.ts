@@ -42,6 +42,7 @@ export enum Message {
 	PRODUCT_NOT_FOUND = 'Product not found or does not belong to this brand!',
 	CONCEPT_NOT_FOUND = 'Concept not found!',
 	GENERATION_NOT_FOUND = 'Generation not found or does not belong to you!',
+	GENERATION_NOT_COMPLETED = 'Generation is not completed yet!',
 }
 
 /** User account status */

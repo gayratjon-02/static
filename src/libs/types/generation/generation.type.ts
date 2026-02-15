@@ -78,6 +78,23 @@ export interface GenerationStatusResponse {
 	created_at: Date;
 }
 
+/** getResults endpoint response — to'liq natija */
+export interface GenerationResultsResponse {
+	_id: string;
+	generation_status: GenerationStatus;
+	important_notes: string;
+	image_url_1x1: string | null;
+	image_url_9x16: string | null;
+	image_url_16x9: string | null;
+	ad_copy_json: AdCopyJson;
+	ad_name: string | null;
+	is_saved: boolean;
+	is_favorite: boolean;
+	brand_snapshot: any;
+	product_snapshot: any;
+	created_at: Date;
+}
+
 /** BullMQ job'ga yuboriladigan data */
 export interface GenerationJobData {
 	user_id: string;
