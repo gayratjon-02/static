@@ -2,7 +2,7 @@ export enum Message {
 	// General
 	SOMETHING_WENT_WRONG = 'Something went wrong!',
 	NO_DATA_FOUND = 'No data found!',
-    NO_BRAND_FOUND = 'No brand found!',
+	NO_BRAND_FOUND = 'No brand found!',
 	CREATE_FAILED = 'Create failed!',
 	UPDATE_FAILED = 'Update failed!',
 	REMOVE_FAILED = 'Remove failed!',
@@ -41,6 +41,7 @@ export enum Message {
 	BRAND_NOT_FOUND = 'Brand not found or does not belong to you!',
 	PRODUCT_NOT_FOUND = 'Product not found or does not belong to this brand!',
 	CONCEPT_NOT_FOUND = 'Concept not found!',
+	GENERATION_NOT_FOUND = 'Generation not found or does not belong to you!',
 }
 
 /** User account status */

@@ -66,6 +66,18 @@ export interface Generation {
 	message: string;
 }
 
+/** getStatus endpoint response */
+export interface GenerationStatusResponse {
+	_id: string;
+	generation_status: GenerationStatus;
+	image_url_1x1: string | null;
+	image_url_9x16: string | null;
+	image_url_16x9: string | null;
+	ad_copy_json: AdCopyJson | null;
+	ad_name: string | null;
+	created_at: Date;
+}
+
 /** BullMQ job'ga yuboriladigan data */
 export interface GenerationJobData {
 	user_id: string;

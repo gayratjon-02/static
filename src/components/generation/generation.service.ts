@@ -6,7 +6,7 @@ import { CreateGenerationDto } from '../../libs/dto/generation/create-generation
 import { Message } from '../../libs/enums/common.enum';
 import { GenerationStatus } from '../../libs/enums/generation/generation.enum';
 import { Member } from '../../libs/types/member/member.type';
-import { Generation, GenerationJobData } from '../../libs/types/generation/generation.type';
+import { Generation, GenerationJobData, GenerationStatusResponse } from '../../libs/types/generation/generation.type';
 
 const GENERATION_CREDIT_COST = 5;
 
@@ -157,5 +157,20 @@ export class GenerationService {
 		} catch (err) {
 			throw err;
 		}
+	}
+
+	public async getStatus(jobId: string, authMember: Member): Promise<GenerationStatusResponse> {
+		const { data, error } = await this.databaseService.client
+			.from('generated_ads')
+			.select('_id, generation_status, image_url_1x1, image_url_9x16, image_url_16x9, ad_copy_json, ad_name, created_at')
+			.eq('_id', jobId)
+			.eq('user_id', authMember._id)
+			.single();
+
+		if (error || !data) {
+			throw new BadRequestException(Message.GENERATION_NOT_FOUND);
+		}
+
+		return data as GenerationStatusResponse;
 	}
 }
