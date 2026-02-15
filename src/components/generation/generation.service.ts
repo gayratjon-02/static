@@ -550,7 +550,7 @@ export class GenerationService {
 		const { data: products, error: productError } = await this.databaseService.client
 			.from('products')
 			.select('_id, product_name, brand_id')
-			.eq('brand_id', brands?.map(b => b._id) || []); // Only products for user's brands
+			.in('brand_id', brands?.map(b => b._id) || []); // Only products for user's brands
 
 		if (brandError || productError) throw new InternalServerErrorException(Message.SOMETHING_WENT_WRONG);
 
@@ -586,6 +586,7 @@ export class GenerationService {
 		const productsWithCount = products?.map(p => ({
 			_id: p._id,
 			name: p.product_name,
+			brand_id: p.brand_id,
 			count: productCounts[p._id] || 0
 		})).filter(p => p.count > 0) || [];
 
