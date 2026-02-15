@@ -72,4 +72,12 @@ export class GenerationController {
 	): Promise<ExportRatiosResponse> {
 		return this.generationService.exportRatios(adId, authMember);
 	}
+
+	@UseGuards(AuthGuard)
+	@Get('getRecent')
+	public async getRecent(
+		@AuthMember() authMember: Member,
+	): Promise<any[]> {
+		return this.generationService.getRecent(authMember);
+	}
 }

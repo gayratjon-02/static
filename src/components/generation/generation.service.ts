@@ -434,4 +434,38 @@ export class GenerationService {
 			],
 		};
 	}
+
+	public async getRecent(authMember: Member, limit: number = 6) {
+		const { data, error } = await this.databaseService.client
+			.from('generated_ads')
+			.select('_id, ad_name, image_url_1x1, created_at, brand_id, concept_id')
+			.eq('user_id', authMember._id)
+			.eq('generation_status', GenerationStatus.COMPLETED)
+			.order('created_at', { ascending: false })
+			.limit(limit);
+
+		if (error) throw new InternalServerErrorException(Message.SOMETHING_WENT_WRONG);
+		if (!data || data.length === 0) return [];
+
+		// Fetch brand names & concept names
+		const brandIds = [...new Set(data.map(d => d.brand_id))];
+		const conceptIds = [...new Set(data.map(d => d.concept_id))];
+
+		const [brandsRes, conceptsRes] = await Promise.all([
+			this.databaseService.client.from('brands').select('_id, brand_name').in('_id', brandIds),
+			this.databaseService.client.from('ad_concepts').select('_id, label').in('_id', conceptIds),
+		]);
+
+		const brandMap = new Map(brandsRes.data?.map(b => [b._id, b.brand_name]));
+		const conceptMap = new Map(conceptsRes.data?.map(c => [c._id, c.label]));
+
+		return data.map(ad => ({
+			_id: ad._id,
+			ad_name: ad.ad_name,
+			image_url: ad.image_url_1x1,
+			created_at: ad.created_at,
+			brand_name: brandMap.get(ad.brand_id) || 'Unknown Brand',
+			concept_name: conceptMap.get(ad.concept_id) || 'Unknown Concept',
+		}));
+	}
 }

@@ -174,4 +174,93 @@ export class MemberService {
 			throw err;
 		}
 	}
+	// getActivity method — oxirgi activitylar (credit transactions asosida)
+	public async getActivity(authMember: Member, limit: number = 5) {
+		const { data, error } = await this.databaseService.client
+			.from('credit_transactions')
+			.select('*')
+			.eq('user_id', authMember._id)
+			.order('created_at', { ascending: false })
+			.limit(limit);
+
+		if (error) throw new InternalServerErrorException(Message.SOMETHING_WENT_WRONG);
+		if (!data || data.length === 0) return [];
+
+		// Reference ID larni yig'ish (faqat generated_ad uchun)
+		const adIds = data
+			.filter(t => t.reference_type === 'generated_ad')
+			.map(t => t.reference_id);
+
+		const uniqueAdIds = [...new Set(adIds)];
+
+		// Ad details olish
+		const { data: ads } = await this.databaseService.client
+			.from('generated_ads')
+			.select('_id, ad_name, brand_id')
+			.in('_id', uniqueAdIds);
+
+		const adMap = new Map(ads?.map(ad => [ad._id, ad]));
+
+		// Brand details olish
+		const brandIds = ads?.map(ad => ad.brand_id) || [];
+		const uniqueBrandIds = [...new Set(brandIds)];
+
+		const { data: brands } = await this.databaseService.client
+			.from('brands')
+			.select('_id, brand_name')
+			.in('_id', uniqueBrandIds);
+
+		const brandMap = new Map(brands?.map(b => [b._id, b.brand_name]));
+
+		// Map transactions to readable activity
+		return data.map(t => {
+			let label = 'Activity';
+			let sub = '';
+			let icon = 'A'; // Default
+
+			if (t.reference_type === 'generated_ad') {
+				const ad = adMap.get(t.reference_id);
+				const brandName = ad ? brandMap.get(ad.brand_id) : '';
+				const adName = ad?.ad_name || 'Ad';
+
+				switch (t.transaction_type) {
+					case 'generation':
+						label = 'Generated ad';
+						sub = `${brandName ? brandName + ' - ' : ''}${adName}`;
+						icon = 'G';
+						break;
+					case 'fix_errors':
+						label = 'Fixed errors';
+						sub = `${brandName ? brandName + ' - ' : ''}${adName}`;
+						icon = 'F';
+						break;
+					case 'regenerate_single':
+						label = 'Regenerated ad';
+						sub = `${brandName ? brandName + ' - ' : ''}${adName}`;
+						icon = 'R';
+						break;
+					default:
+						label = 'Ad generation';
+						sub = adName;
+						break;
+				}
+			} else {
+				// Boshqa transaction turlari (masalan, 'buy_credits')
+				if (t.transaction_type === 'buy_credits') {
+					label = 'Bought credits';
+					sub = `${Math.abs(t.credits_amount)} credits added`;
+					icon = 'B';
+				}
+			}
+
+			return {
+				_id: t._id,
+				label,
+				sub,
+				icon,
+				created_at: t.created_at,
+				amount: t.credits_amount
+			};
+		});
+	}
 }

@@ -12,7 +12,7 @@ import { UpdateMemberDto } from 'src/libs/dto/member/update-member.dto';
 
 @Controller('member')
 export class MemberController {
-	constructor(private readonly memberService: MemberService) {}
+	constructor(private readonly memberService: MemberService) { }
 
 	// test API
 	@Get('test')
@@ -72,5 +72,12 @@ export class MemberController {
 	@Get('getUsage')
 	public async getUsage(@AuthMember() authMember: Member) {
 		return this.memberService.getUsage(authMember);
+	}
+
+	// getActivity
+	@UseGuards(AuthGuard)
+	@Get('getActivity')
+	public async getActivity(@AuthMember() authMember: Member) {
+		return this.memberService.getActivity(authMember);
 	}
 }
