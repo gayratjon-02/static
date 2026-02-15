@@ -11,6 +11,7 @@ import { Generation, GenerationJobData, GenerationStatusResponse, GenerationResu
 
 const GENERATION_CREDIT_COST = 5;
 const FIX_ERRORS_CREDIT_COST = 2;
+const REGENERATE_CREDIT_COST = 2;
 
 @Injectable()
 export class GenerationService {
@@ -292,6 +293,113 @@ export class GenerationService {
 		});
 
 		this.logger.log(`Fix-errors job queued: ${newAd._id} (original: ${adId})`);
+
+		return {
+			job_id: newAd._id,
+			status: GenerationStatus.PENDING,
+			message: Message.GENERATION_STARTED,
+		};
+	}
+
+	public async regenerateSingle(adId: string, authMember: Member): Promise<Generation> {
+		// 1. Original ad olish va tekshirish
+		const { data: originalAd, error: adError } = await this.databaseService.client
+			.from('generated_ads')
+			.select('_id, user_id, brand_id, product_id, concept_id, important_notes, generation_status')
+			.eq('_id', adId)
+			.eq('user_id', authMember._id)
+			.single();
+
+		if (adError || !originalAd) {
+			throw new BadRequestException(Message.GENERATION_NOT_FOUND);
+		}
+
+		if (originalAd.generation_status !== GenerationStatus.COMPLETED) {
+			throw new BadRequestException(Message.GENERATION_NOT_COMPLETED);
+		}
+
+		// 2. Credit tekshirish
+		const { data: userData, error: userError } = await this.databaseService.client
+			.from('users')
+			.select('credits_used, credits_limit, addon_credits_remaining')
+			.eq('_id', authMember._id)
+			.single();
+
+		if (userError || !userData) {
+			throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
+		}
+
+		const creditsRemaining =
+			(userData.credits_limit - userData.credits_used) + (userData.addon_credits_remaining || 0);
+
+		if (creditsRemaining < REGENERATE_CREDIT_COST) {
+			throw new BadRequestException(Message.INSUFFICIENT_CREDITS);
+		}
+
+		// 3. Yangi generated_ads row
+		const { data: newAd, error: insertError } = await this.databaseService.client
+			.from('generated_ads')
+			.insert({
+				user_id: authMember._id,
+				brand_id: originalAd.brand_id,
+				product_id: originalAd.product_id,
+				concept_id: originalAd.concept_id,
+				important_notes: originalAd.important_notes || '',
+				claude_response_json: {},
+				gemini_prompt: '',
+				ad_copy_json: {},
+				generation_status: GenerationStatus.PENDING,
+			})
+			.select('_id')
+			.single();
+
+		if (insertError || !newAd) {
+			this.logger.error(`Failed to create regenerate ad: ${insertError?.message}`);
+			throw new InternalServerErrorException(Message.CREATE_FAILED);
+		}
+
+		// 4. Credit yechish
+		const { error: updateCreditError } = await this.databaseService.client
+			.from('users')
+			.update({ credits_used: userData.credits_used + REGENERATE_CREDIT_COST })
+			.eq('_id', authMember._id);
+
+		if (updateCreditError) {
+			await this.databaseService.client.from('generated_ads').delete().eq('_id', newAd._id);
+			throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
+		}
+
+		// 5. credit_transactions
+		await this.databaseService.client.from('credit_transactions').insert({
+			user_id: authMember._id,
+			credits_amount: -REGENERATE_CREDIT_COST,
+			transaction_type: 'regenerate_single',
+			reference_id: newAd._id,
+			reference_type: 'generated_ad',
+			balance_before: creditsRemaining,
+			balance_after: creditsRemaining - REGENERATE_CREDIT_COST,
+		}).then(({ error }) => {
+			if (error) this.logger.warn(`credit_transactions insert failed (non-blocking): ${error.message}`);
+		});
+
+		// 6. BullMQ — create-ad job (huddi yangi generation kabi)
+		const jobData: GenerationJobData = {
+			user_id: authMember._id,
+			brand_id: originalAd.brand_id,
+			product_id: originalAd.product_id,
+			concept_id: originalAd.concept_id,
+			important_notes: originalAd.important_notes || '',
+			generated_ad_id: newAd._id,
+		};
+
+		await this.generationQueue.add('create-ad', jobData, {
+			attempts: 2,
+			backoff: { type: 'exponential', delay: 5000 },
+			removeOnComplete: true,
+			removeOnFail: false,
+		});
+
+		this.logger.log(`Regenerate-single job queued: ${newAd._id} (original: ${adId})`);
 
 		return {
 			job_id: newAd._id,

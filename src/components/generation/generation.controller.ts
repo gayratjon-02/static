@@ -53,4 +53,14 @@ export class GenerationController {
 	): Promise<Generation> {
 		return this.generationService.fixErrors(adId, input, authMember);
 	}
+
+	@UseGuards(AuthGuard, CreditsGuard)
+	@RequireCredits(2)
+	@Post('regenerateSingle/:adId')
+	public async regenerateSingle(
+		@Param('adId') adId: string,
+		@AuthMember() authMember: Member,
+	): Promise<Generation> {
+		return this.generationService.regenerateSingle(adId, authMember);
+	}
 }
