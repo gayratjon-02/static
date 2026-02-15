@@ -99,8 +99,9 @@ export class ConceptController {
 		@Query('search') search?: string,
 		@Query('page') page: string = '1',
 		@Query('limit') limit: string = '20',
+		@Query('include_inactive') includeInactive?: string,
 	) {
-		return this.conceptService.getConcepts(category, search, +page, +limit);
+		return this.conceptService.getConcepts(category, search, +page, +limit, includeInactive === 'true');
 	}
 
 	// getRecommended — usage_count bo'yicha top 10

@@ -8,20 +8,25 @@ import { AdConcept } from '../../libs/types/concept/concept.type';
 
 @Injectable()
 export class ConceptService {
-	constructor(private databaseService: DatabaseService) {}
+	constructor(private databaseService: DatabaseService) { }
 
-	// getConcepts — concept library (faqat is_active = true)
-	public async getConcepts(category?: string, search?: string, page: number = 1, limit: number = 20) {
+	// getConcepts — concept library (admin: all, user: faqat is_active = true)
+	public async getConcepts(category?: string, search?: string, page: number = 1, limit: number = 20, includeInactive: boolean = false) {
 		try {
 			const offset = (page - 1) * limit;
 
-			// Base query — faqat active conceptlar
+			// Base query
 			let countQuery = this.databaseService.client
 				.from('ad_concepts')
-				.select('*', { count: 'exact', head: true })
-				.eq('is_active', true);
+				.select('*', { count: 'exact', head: true });
 
-			let dataQuery = this.databaseService.client.from('ad_concepts').select('*').eq('is_active', true);
+			let dataQuery = this.databaseService.client.from('ad_concepts').select('*');
+
+			// User uchun faqat active conceptlar
+			if (!includeInactive) {
+				countQuery = countQuery.eq('is_active', true);
+				dataQuery = dataQuery.eq('is_active', true);
+			}
 
 			// Filter: category
 			if (category) {
