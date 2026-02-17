@@ -3,13 +3,36 @@ import { DatabaseService } from '../../database/database.service';
 import { CreateBrandDto } from '../../libs/dto/brand/create-brand.dto';
 import { UpdateBrandDto } from '../../libs/dto/brand/update-brand.dto';
 import { Message } from '../../libs/enums/common.enum';
+import { BrandIndustry, BrandVoice, INDUSTRY_LABELS, VOICE_LABELS } from '../../libs/enums/brand/brand.enum';
 import { T } from '../../libs/types/common';
 import { Brand } from '../../libs/types/brand/brand.type';
 import { Member } from '../../libs/types/member/member.type';
 
 @Injectable()
 export class BrandService {
-	constructor(private databaseService: DatabaseService) {}
+	constructor(private databaseService: DatabaseService) { }
+
+	/** Returns config lists (industries + voices) for frontend dropdowns */
+	public getConfig() {
+		const industries = Object.values(BrandIndustry).map((id) => ({
+			id,
+			label: INDUSTRY_LABELS[id],
+		}));
+
+		// Ensure "Other" is always last
+		const otherIdx = industries.findIndex((i) => i.id === BrandIndustry.OTHER);
+		if (otherIdx > -1) {
+			const [other] = industries.splice(otherIdx, 1);
+			industries.push(other);
+		}
+
+		const voices = Object.values(BrandVoice).map((id) => ({
+			id,
+			label: VOICE_LABELS[id],
+		}));
+
+		return { industries, voices };
+	}
 
 	// createBrand method
 	public async createBrand(input: CreateBrandDto, authMember: Member): Promise<Brand> {

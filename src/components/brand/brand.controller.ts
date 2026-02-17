@@ -33,6 +33,12 @@ if (!existsSync(BRANDS_UPLOAD_DIR)) {
 export class BrandController {
 	constructor(private readonly brandService: BrandService) { }
 
+	// getConfig — returns industry/voice lists for dropdowns (no auth needed)
+	@Get('config')
+	public getConfig() {
+		return this.brandService.getConfig();
+	}
+
 	// uploadLogo — file upload for brand logo
 	@UseGuards(AuthGuard)
 	@Post('uploadLogo')
