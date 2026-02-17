@@ -137,7 +137,30 @@ export class GenerationService {
 				if (error) this.logger.warn(`credit_transactions insert failed (non-blocking): ${error.message}`);
 			});
 
-			// 7. BullMQ queue'ga job qo'shish (6 ta job)
+			// 7. Claude API — 1 ta chaqiruvda 6 ta variation olish (tezlashtirish)
+			this.logger.log(`Fetching brand/product/concept for Claude pre-generation...`);
+			const [brandData, productData, conceptData] = await Promise.all([
+				this.databaseService.client.from('brands').select('*').eq('_id', brand_id).single(),
+				this.databaseService.client.from('products').select('*').eq('_id', product_id).single(),
+				this.databaseService.client.from('ad_concepts').select('*').eq('_id', concept_id).single(),
+			]);
+
+			let claudeVariations: any[] = [];
+			try {
+				this.logger.log(`Calling Claude for 6 variations (single request)...`);
+				const claudeResult = await this.claudeService.generate6Variations(
+					brandData.data,
+					productData.data,
+					conceptData.data,
+					important_notes || '',
+				);
+				claudeVariations = claudeResult.variations;
+				this.logger.log(`Claude returned ${claudeVariations.length} variations`);
+			} catch (claudeErr) {
+				this.logger.warn(`Claude pre-generation failed, jobs will call Claude individually: ${claudeErr.message}`);
+			}
+
+			// 8. BullMQ queue'ga job qo'shish (6 ta job, Claude variation bilan)
 			const jobs = generatedAds.map((ad, i) => ({
 				name: 'create-ad',
 				data: {
@@ -149,6 +172,7 @@ export class GenerationService {
 					generated_ad_id: ad._id,
 					batch_id: batchId,
 					variation_index: i,
+					claude_variation: claudeVariations[i] || undefined,
 				},
 				opts: {
 					attempts: 2,
@@ -160,7 +184,7 @@ export class GenerationService {
 
 			await this.generationQueue.addBulk(jobs);
 
-			this.logger.log(`Generation batch queued: ${batchId} (${generatedAds.length} variations)`);
+			this.logger.log(`Generation batch queued: ${batchId} (${generatedAds.length} variations, claude pre-generated: ${claudeVariations.length > 0})`);
 
 			// 8. Response qaytarish
 			return {

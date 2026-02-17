@@ -12,7 +12,7 @@ import { Brand } from '../../libs/types/brand/brand.type';
 import { Product } from '../../libs/types/product/product.type';
 import { AdConcept } from '../../libs/types/concept/concept.type';
 
-@Processor('generation')
+@Processor('generation', { concurrency: 3 })
 export class GenerationProcessor extends WorkerHost {
 	private readonly logger = new Logger('GenerationProcessor');
 
@@ -95,11 +95,11 @@ export class GenerationProcessor extends WorkerHost {
 				);
 			}
 
-			// 5. Gemini API — 3 ta ratio uchun rasm generatsiya (parallel)
+			// 5. Gemini API — faqat 1:1 rasm generatsiya (tezlashtirish, 9:16 va 16:9 "Get All Ratios" da)
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'generating_images',
-				message: '3  image is being generated (1x1, 9x16, 16x9)...',
+				message: 'Generating image...',
 				progress_percent: 35,
 			});
 
@@ -110,38 +110,27 @@ export class GenerationProcessor extends WorkerHost {
 				background: brand.background_color,
 			};
 
-			const generatedImages: GeneratedImage[] = await this.geminiService.generateAllRatios(
-				claudeResponse.gemini_image_prompt,
-				brandColors,
-			);
+			let fullPrompt = claudeResponse.gemini_image_prompt;
+			if (brandColors) {
+				fullPrompt += `\n\nBrand colors: Primary ${brandColors.primary}, Secondary ${brandColors.secondary}, Accent ${brandColors.accent}, Background ${brandColors.background}`;
+			}
 
-			// 6. Supabase Storage'ga yuklash (parallel)
+			const imageResult = await this.geminiService.generateImage(fullPrompt, undefined, '1:1');
+
+			// 6. Upload faqat 1:1
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'uploading',
-				message: `${generatedImages.length} ta rasm saqlanmoqda...`,
+				message: 'Saving image...',
 				progress_percent: 65,
 			});
 
 			const imageUrls: Record<string, string> = {};
 
-			const uploadResults = await Promise.allSettled(
-				generatedImages.map(async (img) => {
-					const ratioKey = img.ratio.replace(':', 'x');
-					const url = await this.storageService.uploadImage(
-						user_id,
-						generated_ad_id,
-						ratioKey,
-						img.buffer,
-					);
-					imageUrls[ratioKey] = url;
-				}),
-			);
-
-			for (const result of uploadResults) {
-				if (result.status === 'rejected') {
-					this.logger.error(`Upload failed: ${result.reason?.message}`);
-				}
+			if (imageResult && imageResult.data) {
+				const buffer = Buffer.from(imageResult.data, 'base64');
+				const url = await this.storageService.uploadImage(user_id, generated_ad_id, '1x1', buffer);
+				imageUrls['1x1'] = url;
 			}
 
 			// 7. Ad copy (gemini_image_prompt'siz)
