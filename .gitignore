@@ -64,6 +64,9 @@ ROADMAP.md
 .temp
 .tmp
 
+# Generated images (local storage)
+/uploads
+
 # Runtime data
 pids
 *.pid
