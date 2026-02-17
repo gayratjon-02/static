@@ -145,7 +145,18 @@ export class GeminiService {
 
 		const sanitizedPrompt = this.sanitizePromptForImageGeneration(prompt);
 
-		const enhancedPrompt = `Render EXACTLY as specified. Do NOT add, remove, or change any element. 100% match to the product specification. No creative additions.
+		// Aspect ratio ni prompt ichida ko'rsatamiz (model imageConfig.aspectRatio ni qo'llab-quvvatlamaydi)
+		const dimensionsMap: Record<string, string> = {
+			'1:1': '1080x1080',
+			'9:16': '1080x1920',
+			'16:9': '1920x1080',
+			'4:5': '1080x1350',
+			'3:4': '1080x1440',
+			'4:3': '1440x1080',
+		};
+		const dimensions = dimensionsMap[ratioText] || '1080x1080';
+
+		const enhancedPrompt = `Generate a ${dimensions} pixel image (${ratioText} aspect ratio). Render EXACTLY as specified. Do NOT add, remove, or change any element. 100% match to the product specification. No creative additions.
 CRITICAL: Any human models must be FULLY CLOTHED. NEVER shirtless, bare-chested, or topless.
 
 Professional e-commerce product photography: ${sanitizedPrompt}.
@@ -153,21 +164,15 @@ High quality studio lighting, sharp details, clean background.`;
 
 		this.logger.log(`🎨 ========== GEMINI IMAGE GENERATION START ==========`);
 		this.logger.log(`📋 Model: ${this.MODEL}`);
-		this.logger.log(`📐 Aspect ratio (DTO: ${aspectRatio ?? 'default'} -> API: ${ratioText})`);
-		this.logger.log(`📏 Resolution (DTO: ${resolution ?? 'default'} -> API: ${resolutionText})`);
+		this.logger.log(`📐 Aspect ratio: ${ratioText} (${dimensions})`);
+		this.logger.log(`📏 Resolution: ${resolutionText}`);
 
 		try {
-			const imageConfig = {
-				aspectRatio: ratioText,
-				imageSize: resolutionText,
-			};
-
 			const generatePromise = client.models.generateContent({
 				model: this.MODEL,
 				contents: enhancedPrompt,
 				config: {
-					responseModalities: ['TEXT', 'IMAGE'],
-					imageConfig: imageConfig as any, // Cast to any if type mismatch from library version
+					responseModalities: ['IMAGE', 'TEXT'],
 					safetySettings: [
 						{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
 						{ category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -341,11 +346,6 @@ PHOTOGRAPHY REQUIREMENTS:
 ${this.sanitizePromptForImageGeneration(prompt)}`;
 
 		try {
-			const imageConfig = {
-				aspectRatio: ratioText,
-				imageSize: resolutionText,
-			};
-
 			const generatePromise = client.models.generateContent({
 				model: this.MODEL,
 				contents: [
@@ -358,8 +358,7 @@ ${this.sanitizePromptForImageGeneration(prompt)}`;
 					}
 				],
 				config: {
-					responseModalities: ['TEXT', 'IMAGE'],
-					imageConfig: imageConfig as any,
+					responseModalities: ['IMAGE', 'TEXT'],
 					safetySettings: [
 						{ category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
 						{ category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
