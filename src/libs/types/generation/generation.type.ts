@@ -9,6 +9,10 @@ export interface GeneratedAd {
 	concept_id: string;
 	folder_id: string | null;
 
+	// Batch (6 variations per generation)
+	batch_id: string | null;
+	variation_index: number;
+
 	// User Input
 	important_notes: string;
 
@@ -40,7 +44,7 @@ export interface GeneratedAd {
 	created_at: Date;
 }
 
-/** Claude API response format */
+/** Claude API response format (bitta variation) */
 export interface ClaudeResponseJson {
 	headline: string;
 	subheadline: string;
@@ -48,6 +52,11 @@ export interface ClaudeResponseJson {
 	callout_texts: string[];
 	cta_text: string;
 	gemini_image_prompt: string;
+}
+
+/** Claude API response — 6 ta variation */
+export interface Claude6VariationsResponse {
+	variations: ClaudeResponseJson[];
 }
 
 /** Ad copy (Claude response'dan gemini_image_prompt chiqarilgan) */
@@ -114,6 +123,9 @@ export interface GenerationJobData {
 	concept_id: string;
 	important_notes: string;
 	generated_ad_id: string;
+	batch_id?: string;
+	variation_index?: number;
+	claude_variation?: ClaudeResponseJson;
 }
 
 /** BullMQ fix-errors job data */
