@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS generated_ads (
   concept_id                UUID REFERENCES ad_concepts(_id) ON DELETE SET NULL,
   folder_id                 UUID REFERENCES ad_folders(_id) ON DELETE SET NULL,
   
+  -- Batch (6 variations per generation)
+  batch_id                  UUID,
+  variation_index           INTEGER NOT NULL DEFAULT 0,
+  
   -- User Input
   important_notes           TEXT,
   
@@ -51,6 +55,7 @@ CREATE INDEX idx_generated_ads_brand_id ON generated_ads (brand_id);
 CREATE INDEX idx_generated_ads_product_id ON generated_ads (product_id);
 CREATE INDEX idx_generated_ads_concept_id ON generated_ads (concept_id);
 CREATE INDEX idx_generated_ads_folder_id ON generated_ads (folder_id);
+CREATE INDEX idx_generated_ads_batch_id ON generated_ads (batch_id);
 CREATE INDEX idx_generated_ads_saved ON generated_ads (user_id, is_saved) WHERE is_saved = TRUE;
 CREATE INDEX idx_generated_ads_favorite ON generated_ads (user_id, is_favorite) WHERE is_favorite = TRUE;
 CREATE INDEX idx_generated_ads_status ON generated_ads (generation_status);
