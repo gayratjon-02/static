@@ -49,8 +49,7 @@ export class StorageService {
 		fs.writeFileSync(filePath, imageBuffer);
 
 		// Local URL qaytarish (main.ts da app.useStaticAssets orqali serve qilinadi)
-		const port = this.configService.get<string>('PORT_API') || '3007';
-		const baseUrl = `http://localhost:${port}`;
+		const baseUrl = this.configService.get<string>('UPLOAD_BASE_URL') || `http://localhost:${this.configService.get<string>('PORT_API') || '3007'}`;
 		const publicUrl = `${baseUrl}/uploads/${relativePath}/${fileName}`;
 
 		this.logger.log(`Image saved locally: ${publicUrl}`);
