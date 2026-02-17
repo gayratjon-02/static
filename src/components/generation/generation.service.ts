@@ -1,7 +1,9 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../../database/database.service';
+import { ClaudeService } from '../../libs/services/claude.service';
 import { CreateGenerationDto } from '../../libs/dto/generation/create-generation.dto';
 import { GetGenerationsDto } from '../../libs/dto/generation/get-generations.dto';
 import { FixErrorsDto } from '../../libs/dto/generation/fix-errors.dto';
@@ -20,6 +22,7 @@ export class GenerationService {
 
 	constructor(
 		private databaseService: DatabaseService,
+		private claudeService: ClaudeService,
 		@InjectQueue('generation') private generationQueue: Queue,
 	) { }
 

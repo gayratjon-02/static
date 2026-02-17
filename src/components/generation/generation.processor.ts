@@ -72,20 +72,27 @@ export class GenerationProcessor extends WorkerHost {
 				this.fetchConcept(concept_id),
 			]);
 
-			// 4. Claude API — ad copy generation
-			this.generationGateway.emitProgress(user_id, {
-				job_id: generated_ad_id,
-				step: 'generating_copy',
-				message: 'AI ad copy is generating...',
-				progress_percent: 15,
-			});
+			// 4. Claude API — ad copy generation (agar job data'da bo'lmasa)
+			let claudeResponse: ClaudeResponseJson;
 
-			const claudeResponse: ClaudeResponseJson = await this.claudeService.generateAdCopy(
-				brand,
-				product,
-				concept,
-				important_notes || '',
-			);
+			if (job.data.claude_variation) {
+				this.logger.log(`Using pre-generated Claude variation for job ${generated_ad_id}`);
+				claudeResponse = job.data.claude_variation;
+			} else {
+				this.generationGateway.emitProgress(user_id, {
+					job_id: generated_ad_id,
+					step: 'generating_copy',
+					message: 'AI ad copy is generating...',
+					progress_percent: 15,
+				});
+
+				claudeResponse = await this.claudeService.generateAdCopy(
+					brand,
+					product,
+					concept,
+					important_notes || '',
+				);
+			}
 
 			// 5. Gemini API — 3 ta ratio uchun rasm generatsiya (parallel)
 			this.generationGateway.emitProgress(user_id, {

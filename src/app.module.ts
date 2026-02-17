@@ -17,7 +17,7 @@ import { BillingModule } from './components/billing/billing.module';
 	imports: [
 		ConfigModule.forRoot({
 			isGlobal: true,
-      envFilePath: `.env`,
+			envFilePath: `.env`,
 		}),
 
 		DatabaseModule,
@@ -37,4 +37,4 @@ import { BillingModule } from './components/billing/billing.module';
 		BillingModule,
 	],
 })
-export class AppModule {}
+export class AppModule { }
