@@ -9,7 +9,16 @@ async function bootstrap() {
 	const app = await NestFactory.create<NestExpressApplication>(AppModule);
 	app.useGlobalPipes(new ValidationPipe());
 	app.useGlobalInterceptors(new LoggingInterceptor());
-	app.enableCors({ origin: true, credentials: true });
+	app.enableCors({
+		origin: [
+			'http://167.172.90.235:4010',
+			'http://localhost:3000',
+			'http://localhost:4010',
+		],
+		methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+		allowedHeaders: ['Content-Type', 'Authorization'],
+		credentials: true,
+	});
 
 	// Serve uploaded files statically
 	app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
