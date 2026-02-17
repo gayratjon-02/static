@@ -88,7 +88,7 @@ export class GenerationService {
 				.select('_id');
 
 			if (insertError || !generatedAds || generatedAds.length === 0) {
-				this.logger.error(`Failed to create generated ads batch: ${insertError?.message}`);
+				this.logger.error(`Failed to create generated ads batch: ${JSON.stringify(insertError)}`);
 				throw new InternalServerErrorException(Message.CREATE_FAILED);
 			}
 
