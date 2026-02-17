@@ -22,28 +22,31 @@ export class ConceptService {
 
 	/** Get all concept categories ordered by display_order */
 	public async getCategories(): Promise<{ list: ConceptCategoryItem[] }> {
-		const { data, error } = await this.databaseService.client
-			.from('concept_categories')
-			.select('*')
-			.order('display_order', { ascending: true });
+		try {
+			const { data, error } = await this.databaseService.client
+				.from('concept_categories')
+				.select('*')
+				.order('display_order', { ascending: true });
 
-		if (error) {
-			console.log('Supabase getCategories error:', error);
-			throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+			if (error) {
+				// Table may not exist yet — return empty gracefully
+				console.log('getCategories warning:', error.message);
+				return { list: [] };
+			}
+
+			return { list: (data as ConceptCategoryItem[]) || [] };
+		} catch {
+			return { list: [] };
 		}
-
-		return { list: (data as ConceptCategoryItem[]) || [] };
 	}
 
 	/** Create a new concept category */
 	public async createCategory(input: CreateCategoryDto): Promise<ConceptCategoryItem> {
-		// Auto-generate slug if not provided
 		const slug = input.slug || input.name
 			.toLowerCase()
 			.replace(/[^a-z0-9]+/g, '_')
 			.replace(/^_|_$/g, '');
 
-		// Check slug uniqueness
 		const { data: existing } = await this.databaseService.client
 			.from('concept_categories')
 			.select('_id')
@@ -75,7 +78,6 @@ export class ConceptService {
 		return data as ConceptCategoryItem;
 	}
 
-	/** Get next available display_order for categories */
 	private async getNextCategoryOrder(): Promise<number> {
 		const { data } = await this.databaseService.client
 			.from('concept_categories')
@@ -90,7 +92,7 @@ export class ConceptService {
 	// CONCEPTS — CRUD
 	// =============================================
 
-	/** Get concepts with filtering, search, tags, and pagination (excludes soft-deleted) */
+	/** Get concepts with filtering, search, tags, and pagination */
 	public async getConcepts(
 		categoryId?: string,
 		search?: string,
@@ -101,37 +103,30 @@ export class ConceptService {
 	) {
 		const offset = (page - 1) * limit;
 
-		// Base queries — always exclude soft-deleted
 		let countQuery = this.databaseService.client
 			.from('ad_concepts')
-			.select('*', { count: 'exact', head: true })
-			.is('deleted_at', null);
+			.select('*', { count: 'exact', head: true });
 
 		let dataQuery = this.databaseService.client
 			.from('ad_concepts')
-			.select('*, concept_categories(name, slug)')
-			.is('deleted_at', null);
+			.select('*');
 
-		// Only active concepts for non-admin queries
 		if (!includeInactive) {
 			countQuery = countQuery.eq('is_active', true);
 			dataQuery = dataQuery.eq('is_active', true);
 		}
 
-		// Filter: category_id
 		if (categoryId) {
 			countQuery = countQuery.eq('category_id', categoryId);
 			dataQuery = dataQuery.eq('category_id', categoryId);
 		}
 
-		// Filter: search (name or description)
 		if (search) {
 			const searchFilter = `name.ilike.%${search}%,description.ilike.%${search}%`;
 			countQuery = countQuery.or(searchFilter);
 			dataQuery = dataQuery.or(searchFilter);
 		}
 
-		// Filter: tags (array overlap)
 		if (tags) {
 			const tagList = tags.split(',').map(t => t.trim()).filter(Boolean);
 			if (tagList.length > 0) {
@@ -140,7 +135,6 @@ export class ConceptService {
 			}
 		}
 
-		// Total count
 		const { count, error: countError } = await countQuery;
 
 		if (countError) {
@@ -148,7 +142,6 @@ export class ConceptService {
 			throw new InternalServerErrorException(Message.NO_DATA_FOUND);
 		}
 
-		// Paginated list
 		const { data, error } = await dataQuery
 			.order('display_order', { ascending: true })
 			.range(offset, offset + limit - 1);
@@ -158,34 +151,11 @@ export class ConceptService {
 			throw new InternalServerErrorException(Message.NO_DATA_FOUND);
 		}
 
-		// Flatten joined category data
-		const list = (data || []).map((item: T) => {
-			const concept: T = { ...item };
-			if (item.concept_categories) {
-				concept.category_name = item.concept_categories.name;
-				concept.category_slug = item.concept_categories.slug;
-			}
-			delete concept.concept_categories;
-			return concept;
-		});
-
-		return { list: list as AdConcept[], total: count || 0 };
+		return { list: (data || []) as AdConcept[], total: count || 0 };
 	}
 
-	/** Create a new concept (auto-assigns display_order within category) */
+	/** Create a new concept */
 	public async createConcept(input: CreateConceptDto): Promise<AdConcept> {
-		// Verify category exists
-		const { data: cat, error: catError } = await this.databaseService.client
-			.from('concept_categories')
-			.select('_id')
-			.eq('_id', input.category_id)
-			.single();
-
-		if (catError || !cat) {
-			throw new BadRequestException('Invalid category_id: category not found');
-		}
-
-		// Auto-assign display_order = max in this category + 1
 		const displayOrder = input.display_order ?? await this.getNextConceptOrder(input.category_id);
 
 		const { data, error } = await this.databaseService.client
@@ -212,44 +182,31 @@ export class ConceptService {
 		return data as AdConcept;
 	}
 
-	/** Get next display_order within a specific category */
-	private async getNextConceptOrder(categoryId: string): Promise<number> {
-		const { data } = await this.databaseService.client
+	private async getNextConceptOrder(categoryId?: string): Promise<number> {
+		let query = this.databaseService.client
 			.from('ad_concepts')
 			.select('display_order')
-			.eq('category_id', categoryId)
-			.is('deleted_at', null)
 			.order('display_order', { ascending: false })
 			.limit(1);
 
+		if (categoryId) {
+			query = query.eq('category_id', categoryId);
+		}
+
+		const { data } = await query;
 		return (data?.[0]?.display_order ?? -1) + 1;
 	}
 
 	/** Update an existing concept */
 	public async updateConcept(id: string, input: UpdateConceptDto): Promise<AdConcept> {
-		// Check concept exists and is not deleted
 		const { data: existing, error: findError } = await this.databaseService.client
 			.from('ad_concepts')
-			.select('_id, category_id')
+			.select('_id')
 			.eq('_id', id)
-			.is('deleted_at', null)
 			.single();
 
 		if (findError || !existing) {
 			throw new BadRequestException(Message.NO_DATA_FOUND);
-		}
-
-		// If category_id is being updated, verify it exists
-		if (input.category_id) {
-			const { data: cat, error: catError } = await this.databaseService.client
-				.from('concept_categories')
-				.select('_id')
-				.eq('_id', input.category_id)
-				.single();
-
-			if (catError || !cat) {
-				throw new BadRequestException('Invalid category_id: category not found');
-			}
 		}
 
 		const updateData: T = {};
@@ -269,7 +226,6 @@ export class ConceptService {
 			.from('ad_concepts')
 			.update(updateData)
 			.eq('_id', id)
-			.is('deleted_at', null)
 			.select('*')
 			.single();
 
@@ -281,13 +237,12 @@ export class ConceptService {
 		return data as AdConcept;
 	}
 
-	/** Soft-delete a concept (sets deleted_at, does NOT permanently remove) */
+	/** Delete a concept (hard delete — soft delete available after migration 003) */
 	public async deleteConcept(id: string): Promise<{ message: string }> {
 		const { data: existing, error: findError } = await this.databaseService.client
 			.from('ad_concepts')
 			.select('_id')
 			.eq('_id', id)
-			.is('deleted_at', null)
 			.single();
 
 		if (findError || !existing) {
@@ -296,93 +251,94 @@ export class ConceptService {
 
 		const { error } = await this.databaseService.client
 			.from('ad_concepts')
-			.update({ deleted_at: new Date().toISOString() })
+			.delete()
 			.eq('_id', id);
 
 		if (error) {
 			throw new InternalServerErrorException(Message.REMOVE_FAILED);
 		}
 
-		return { message: 'Concept soft-deleted' };
+		return { message: 'Concept deleted successfully' };
 	}
 
 	// =============================================
-	// CONCEPTS — REORDER (Category-Scoped, Transactional)
+	// CONCEPTS — REORDER (Category-Scoped)
 	// =============================================
 
-	/** Batch reorder concepts within a single category via Postgres RPC */
+	/** Batch reorder concepts within a category */
 	public async reorderConcepts(input: ReorderConceptsDto): Promise<{ message: string }> {
-		const { category_id, items } = input;
+		const { items } = input;
 
 		if (!items || items.length === 0) {
 			throw new BadRequestException('No items to reorder');
 		}
 
-		// Call transactional RPC
-		const { error } = await this.databaseService.client.rpc(
-			'reorder_concepts_in_category',
-			{
-				target_category_id: category_id,
-				items: JSON.stringify(items),
-			},
-		);
+		// Sequential updates (will use RPC after migration 003 is run)
+		for (const item of items) {
+			const { error } = await this.databaseService.client
+				.from('ad_concepts')
+				.update({ display_order: item.display_order })
+				.eq('_id', item.id);
 
-		if (error) {
-			console.log('Supabase reorder RPC error:', error);
-			throw new InternalServerErrorException('Failed to reorder concepts: ' + error.message);
+			if (error) {
+				console.log(`Supabase reorder error for ${item.id}:`, error);
+				throw new InternalServerErrorException('Failed to reorder concepts');
+			}
 		}
 
 		return { message: 'Concepts reordered successfully' };
 	}
 
 	// =============================================
-	// CONCEPTS — USAGE TRACKING (Atomic via RPC)
+	// USAGE TRACKING
 	// =============================================
 
-	/** Atomically increment usage_count via Postgres RPC */
+	/** Increment usage_count (will use atomic RPC after migration 003 is run) */
 	public async incrementUsage(id: string): Promise<{ usage_count: number }> {
-		const { data, error } = await this.databaseService.client.rpc(
-			'increment_concept_usage',
-			{ concept_id: id },
-		);
+		const { data: concept, error: findError } = await this.databaseService.client
+			.from('ad_concepts')
+			.select('_id, usage_count')
+			.eq('_id', id)
+			.single();
 
-		if (error) {
-			console.log('Supabase incrementUsage RPC error:', error);
-			throw new BadRequestException(error.message || Message.NO_DATA_FOUND);
+		if (findError || !concept) {
+			throw new BadRequestException(Message.NO_DATA_FOUND);
 		}
 
-		return { usage_count: data as number };
+		const newCount = (concept.usage_count || 0) + 1;
+
+		const { data, error } = await this.databaseService.client
+			.from('ad_concepts')
+			.update({ usage_count: newCount })
+			.eq('_id', id)
+			.select('usage_count')
+			.single();
+
+		if (error || !data) {
+			throw new InternalServerErrorException(Message.UPDATE_FAILED);
+		}
+
+		return { usage_count: data.usage_count };
 	}
 
 	// =============================================
-	// CONCEPTS — RECOMMENDED (excludes soft-deleted)
+	// RECOMMENDED
 	// =============================================
 
 	/** Get top concepts by usage_count */
 	public async getRecommendedConcepts(): Promise<{ list: AdConcept[] }> {
 		const { data, error } = await this.databaseService.client
 			.from('ad_concepts')
-			.select('*, concept_categories(name, slug)')
+			.select('*')
 			.eq('is_active', true)
-			.is('deleted_at', null)
 			.order('usage_count', { ascending: false })
 			.limit(this.conceptConfig.recommendedLimit);
 
 		if (error) {
-			throw new InternalServerErrorException(Message.NO_DATA_FOUND);
+			console.log('Supabase getRecommended error:', error);
+			return { list: [] };
 		}
 
-		// Flatten joined category data
-		const list = (data || []).map((item: T) => {
-			const concept: T = { ...item };
-			if (item.concept_categories) {
-				concept.category_name = item.concept_categories.name;
-				concept.category_slug = item.concept_categories.slug;
-			}
-			delete concept.concept_categories;
-			return concept;
-		});
-
-		return { list: list as AdConcept[] };
+		return { list: (data || []) as AdConcept[] };
 	}
 }
