@@ -156,11 +156,20 @@ export class GeminiService {
 		};
 		const dimensions = dimensionsMap[ratioText] || '1080x1080';
 
-		const enhancedPrompt = `Generate a ${dimensions} pixel image (${ratioText} aspect ratio). Render EXACTLY as specified. Do NOT add, remove, or change any element. 100% match to the product specification. No creative additions.
+		const enhancedPrompt = `You are a professional commercial ad designer.
+
+STRICT TEXT RENDERING RULES:
+- ZERO tolerance for misspelled words, garbled text, random micro text, blurry small text, cropped typography, or deformed letters.
+- All visible text MUST be: sharp, fully readable, correctly spelled, aligned properly, using clean sans-serif font, with correct kerning and spacing.
+- Do NOT generate fake nutrition labels, microscopic product packaging text, or random supplement claims on products.
+- If any text cannot be rendered perfectly clear and readable, DO NOT render it at all.
+- Before generating the image, internally verify: all words are spelled correctly, no extra words exist, no cropped letters, no deformed characters. If verification fails, regenerate internally.
+
+Generate a ${dimensions} pixel image (${ratioText} aspect ratio). Render EXACTLY as specified. Do NOT add, remove, or change any element. 100% match to the product specification. No creative additions.
 CRITICAL: Any human models must be FULLY CLOTHED. NEVER shirtless, bare-chested, or topless.
 
-Professional e-commerce product photography: ${sanitizedPrompt}.
-High quality studio lighting, sharp details, clean background.`;
+Professional commercial ad design: ${sanitizedPrompt}.
+High quality studio lighting, sharp details, clean background, modern minimal design.`;
 
 		this.logger.log(`🎨 ========== GEMINI IMAGE GENERATION START ==========`);
 		this.logger.log(`📋 Model: ${this.MODEL}`);

@@ -289,29 +289,41 @@ You MUST respond with valid JSON only, no markdown, no code blocks. The JSON mus
 		if (isSocialProof) {
 			conceptRules = `
 === SOCIAL PROOF RULES (MANDATORY FOR ALL 6 VARIATIONS) ===
-You are a template rendering engine, NOT a creative explorer. ALL variations MUST follow this base layout:
+You are a professional commercial ad designer and template rendering engine, NOT a creative explorer.
+ZERO tolerance for misspelled words, garbled text, random micro text, extra product claims, fake nutrition labels, blurry small text, cropped typography, or deformed letters.
+
+ALL variations MUST follow this base layout:
 
 1. **TOP SECTION**:
-   - Large headline: "${product.star_rating || '4.7'} ★ Rated" (or creative variation of the rating)
+   - Large headline: "${product.star_rating || '4.7'} ★ Rated" + short benefit phrase
    - Clean sans-serif font, use primary brand color (${brand.primary_color})
+   - Text MUST be sharp, fully readable, correctly spelled, and aligned properly
 
 2. **MIDDLE SECTION**:
-   - Centered product image (front-facing, realistic, no distortion, soft shadow only)
+   - Centered product image (front-facing, realistic, clean label, NO distortion, soft shadow only)
+   - NO small unreadable packaging text on the product — clean label only
    - Behind the product: 3–5 review cards (white bg, soft shadow, slight angle max 15°)
    - Each card: 5 gold stars + short testimonial (max 8 words) + first name + last initial
    - Cards must NOT overlap the product
+   - NO random supplement claims, NO fake weight labels, NO distorted micro text
 
 3. **BOTTOM SECTION**:
    ${product.offer_text ? `- Offer badge: "${product.offer_text}" — accent color (${brand.accent_color}) bg, white bold text` : '- No offer badge'}
    - Review count: "${product.review_count || '3,000'}+ Happy Customers"
 
-4. **STRICT COLOR RULES**: ONLY use primary (${brand.primary_color}), secondary (${brand.secondary_color}), accent (${brand.accent_color}), white, dark navy. NO neon, NO random gradients.
+4. **STRICT COLOR RULES**: ONLY use primary (${brand.primary_color}), secondary (${brand.secondary_color}), accent (${brand.accent_color}), white, dark navy. NO neon, NO glow, NO random gradients.
 
-5. **TYPOGRAPHY**: Clean modern sans-serif only. Headline large, testimonials medium, meta small.
+5. **TYPOGRAPHY RULES (CRITICAL)**:
+   - Clean modern sans-serif ONLY
+   - ALL visible text must be: sharp, fully readable, correctly spelled, aligned properly, with correct kerning and spacing
+   - Strong hierarchy: headline large, testimonials medium, meta small
+   - If any text cannot be rendered perfectly, DO NOT render it at all
 
-6. **FORBIDDEN**: No extra badges, no claims not in USPs, no medical claims, no fake awards, no watermarks, no text cut-off, no decorative fonts.
+6. **FORBIDDEN**: No extra badges, no claims not in USPs, no medical claims, no fake awards, no watermarks, no text cut-off, no decorative fonts, no microscopic product packaging text, no random supplement facts.
 
-Each variation should differ in: headline wording, testimonial content, card arrangement, background gradient direction, and overall emphasis — but ALL must follow the Social Proof layout above.
+7. **SELF-VERIFICATION**: In each gemini_image_prompt, include: "Before generating, internally verify: all words spelled correctly, no extra words exist, no cropped letters, no deformed characters. If verification fails, regenerate."
+
+Each variation should differ in: headline wording, testimonial content, card arrangement, background style, and overall emphasis — but ALL must follow the Social Proof layout above.
 `;
 		}
 
@@ -402,15 +414,21 @@ Generate EXACTLY 6 unique variations as a JSON object with a "variations" array.
 		} else if (isSocialProof) {
 			specificInstructions = `
 === SOCIAL PROOF RULES (Category: ${concept.category}) ===
-You are a template rendering engine, NOT a creative explorer. Follow this layout EXACTLY:
+You are a professional commercial ad designer and template rendering engine, NOT a creative explorer.
+ZERO tolerance for misspelled words, garbled text, random micro text, extra product claims, fake nutrition labels, blurry small text, cropped typography, or deformed letters.
+
+Follow this layout EXACTLY:
 
 1. **TOP SECTION**:
-   - Large headline: "${product.star_rating || '4.7'} ★ Rated"
+   - Large headline: "${product.star_rating || '4.7'} ★ Rated" + short benefit phrase
    - Clean sans-serif font
    - Use primary brand color (${brand.primary_color}) for headline
+   - Text MUST be sharp, fully readable, correctly spelled, and aligned properly
 
 2. **MIDDLE SECTION**:
-   - Centered product image (front-facing, realistic, no distortion)
+   - Centered product image (front-facing, realistic, clean label, NO distortion)
+   - NO small unreadable packaging text on the product — clean label only
+   - NO random supplement claims, NO fake weight labels (e.g. 30g), NO distorted micro text
    - Subtle soft shadow only, no rotation more than 10 degrees
    - Behind the product: 3–5 review cards with:
      * White background, soft shadow, slight angle variation (max 15 degrees)
@@ -422,15 +440,21 @@ You are a template rendering engine, NOT a creative explorer. Follow this layout
    - Review count line: "${product.review_count || '3,000'}+ Happy Customers" — clean typography
 
 4. **COLOR RULES** (STRICT):
-   - Background: soft neutral gradient (very subtle)
+   - Background: soft neutral gradient (very subtle) or clean white
    - ONLY use: primary (${brand.primary_color}), secondary (${brand.secondary_color}), accent (${brand.accent_color}), white, dark navy text
    - NO extra colors, NO neon glow, NO random gradients
 
-5. **TYPOGRAPHY**: Clean modern sans-serif only. Strong hierarchy: headline large, testimonials medium, meta info small.
+5. **TYPOGRAPHY RULES (CRITICAL)**:
+   - Clean modern sans-serif ONLY
+   - ALL visible text must be: sharp, fully readable, correctly spelled, aligned properly, with correct kerning and spacing
+   - Strong hierarchy: headline large, testimonials medium, meta info small
+   - If any text cannot be rendered perfectly, DO NOT render it at all
 
 6. **COMPOSITION**: Balanced spacing, clean margins, no crowded layout, no overlapping chaos. Clear visual focus on product.
 
-7. **FORBIDDEN**: No extra badges, no random claims not in USPs, no medical claims, no fake awards, no watermarks, no text cut-off, no inconsistent star format, no decorative fonts.
+7. **FORBIDDEN**: No extra badges, no random claims not in USPs, no medical claims, no fake awards, no watermarks, no text cut-off, no inconsistent star format, no decorative fonts, no microscopic product packaging text, no random supplement facts.
+
+8. **SELF-VERIFICATION INSTRUCTION**: Include in the gemini_image_prompt: "Before generating, internally verify: all words spelled correctly, no extra words exist, no cropped letters, no deformed characters. If verification fails, regenerate."
 `;
 		}
 
