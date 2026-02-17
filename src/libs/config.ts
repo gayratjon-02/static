@@ -1,4 +1,4 @@
-export const GEMINI_MODEL = 'gemini-2.0-flash-preview-image-generation'; // Image generation model — 'gemini-2.0-flash' does NOT support image output
+export const GEMINI_MODEL = 'gemini-2.0-flash-exp'; // Supports responseModalities: ['TEXT', 'IMAGE'] for native image generation
 // Note: 'gemini-3-pro-image-preview' might be an internal or preview name. 
 // Using a standard model for now, but user requested specific one.
 // User spec: private readonly MODEL = GEMINI_MODEL; 
