@@ -4,19 +4,18 @@ import {
 	IsOptional,
 	IsArray,
 	IsBoolean,
-	IsEnum,
+	IsUUID,
 	IsUrl,
 	IsNumber,
 	MaxLength,
 	ArrayMinSize,
 	Min,
 } from 'class-validator';
-import { ConceptCategory } from '../../enums/concept/concept.enum';
 
 export class CreateConceptDto {
-	@IsEnum(ConceptCategory)
+	@IsUUID()
 	@IsNotEmpty()
-	category: ConceptCategory;
+	category_id: string;
 
 	@IsString()
 	@IsNotEmpty()

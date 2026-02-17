@@ -3,18 +3,18 @@ import {
 	IsOptional,
 	IsArray,
 	IsBoolean,
-	IsEnum,
+	IsUUID,
 	IsNumber,
+	IsUrl,
 	MaxLength,
 	ArrayMinSize,
 	Min,
 } from 'class-validator';
-import { ConceptCategory } from '../../enums/concept/concept.enum';
 
 export class UpdateConceptDto {
-	@IsEnum(ConceptCategory)
+	@IsUUID()
 	@IsOptional()
-	category?: ConceptCategory;
+	category_id?: string;
 
 	@IsString()
 	@IsOptional()
@@ -37,7 +37,7 @@ export class UpdateConceptDto {
 	@MaxLength(500)
 	description?: string;
 
-	@IsString()
+	@IsUrl()
 	@IsOptional()
 	source_url?: string;
 
