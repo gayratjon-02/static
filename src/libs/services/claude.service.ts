@@ -282,8 +282,41 @@ You MUST respond with valid JSON only, no markdown, no code blocks. The JSON mus
 		concept: AdConcept,
 		importantNotes: string,
 	): string {
-		return `Create exactly 6 unique Facebook ad creative variations based on the following:
+		// Detect concept category for specific rules
+		const isSocialProof = concept.category?.toLowerCase().includes('social') || concept.category?.toLowerCase().includes('proof');
 
+		let conceptRules = '';
+		if (isSocialProof) {
+			conceptRules = `
+=== SOCIAL PROOF RULES (MANDATORY FOR ALL 6 VARIATIONS) ===
+You are a template rendering engine, NOT a creative explorer. ALL variations MUST follow this base layout:
+
+1. **TOP SECTION**:
+   - Large headline: "${product.star_rating || '4.7'} ★ Rated" (or creative variation of the rating)
+   - Clean sans-serif font, use primary brand color (${brand.primary_color})
+
+2. **MIDDLE SECTION**:
+   - Centered product image (front-facing, realistic, no distortion, soft shadow only)
+   - Behind the product: 3–5 review cards (white bg, soft shadow, slight angle max 15°)
+   - Each card: 5 gold stars + short testimonial (max 8 words) + first name + last initial
+   - Cards must NOT overlap the product
+
+3. **BOTTOM SECTION**:
+   ${product.offer_text ? `- Offer badge: "${product.offer_text}" — accent color (${brand.accent_color}) bg, white bold text` : '- No offer badge'}
+   - Review count: "${product.review_count || '3,000'}+ Happy Customers"
+
+4. **STRICT COLOR RULES**: ONLY use primary (${brand.primary_color}), secondary (${brand.secondary_color}), accent (${brand.accent_color}), white, dark navy. NO neon, NO random gradients.
+
+5. **TYPOGRAPHY**: Clean modern sans-serif only. Headline large, testimonials medium, meta small.
+
+6. **FORBIDDEN**: No extra badges, no claims not in USPs, no medical claims, no fake awards, no watermarks, no text cut-off, no decorative fonts.
+
+Each variation should differ in: headline wording, testimonial content, card arrangement, background gradient direction, and overall emphasis — but ALL must follow the Social Proof layout above.
+`;
+		}
+
+		return `Create exactly 6 unique Facebook ad creative variations based on the following:
+${conceptRules}
 === BRAND ===
 Name: ${brand.name}
 Industry: ${brand.industry}
@@ -337,6 +370,7 @@ Generate EXACTLY 6 unique variations as a JSON object with a "variations" array.
 	): string {
 		// Detect Concept Category
 		const isFeatureCallout = concept.category?.toLowerCase().includes('feature') || concept.category?.toLowerCase().includes('callout');
+		const isSocialProof = concept.category?.toLowerCase().includes('social') || concept.category?.toLowerCase().includes('proof');
 		const isComparison = concept.category?.toLowerCase().includes('comparison') || concept.category?.toLowerCase().includes('us vs them');
 
 		// Variation Styles (0-5)
@@ -364,6 +398,39 @@ Generate EXACTLY 6 unique variations as a JSON object with a "variations" array.
    - CTA: Distinct button style, placed clearly (Bottom Center or aligned with Offer).
    - If an Offer exists (${product.offer_text || 'N/A'}), display it in a badge or integrated into the CTA, do not clutter.
 4. **Safety**: DO NOT use medical claims (cure, treat, heal). Use "support", "help", "promote".
+`;
+		} else if (isSocialProof) {
+			specificInstructions = `
+=== SOCIAL PROOF RULES (Category: ${concept.category}) ===
+You are a template rendering engine, NOT a creative explorer. Follow this layout EXACTLY:
+
+1. **TOP SECTION**:
+   - Large headline: "${product.star_rating || '4.7'} ★ Rated"
+   - Clean sans-serif font
+   - Use primary brand color (${brand.primary_color}) for headline
+
+2. **MIDDLE SECTION**:
+   - Centered product image (front-facing, realistic, no distortion)
+   - Subtle soft shadow only, no rotation more than 10 degrees
+   - Behind the product: 3–5 review cards with:
+     * White background, soft shadow, slight angle variation (max 15 degrees)
+     * Each card: 5 gold stars + short testimonial (max 8 words) + first name + last initial
+     * Cards must NOT overlap the product
+
+3. **BOTTOM SECTION**:
+   ${product.offer_text ? `- Offer badge: "${product.offer_text}" — accent color (${brand.accent_color}) background, white bold text` : '- No offer badge needed'}
+   - Review count line: "${product.review_count || '3,000'}+ Happy Customers" — clean typography
+
+4. **COLOR RULES** (STRICT):
+   - Background: soft neutral gradient (very subtle)
+   - ONLY use: primary (${brand.primary_color}), secondary (${brand.secondary_color}), accent (${brand.accent_color}), white, dark navy text
+   - NO extra colors, NO neon glow, NO random gradients
+
+5. **TYPOGRAPHY**: Clean modern sans-serif only. Strong hierarchy: headline large, testimonials medium, meta info small.
+
+6. **COMPOSITION**: Balanced spacing, clean margins, no crowded layout, no overlapping chaos. Clear visual focus on product.
+
+7. **FORBIDDEN**: No extra badges, no random claims not in USPs, no medical claims, no fake awards, no watermarks, no text cut-off, no inconsistent star format, no decorative fonts.
 `;
 		}
 
