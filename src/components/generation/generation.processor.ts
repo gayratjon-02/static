@@ -34,7 +34,7 @@ export class GenerationProcessor extends WorkerHost {
 	}
 
 	private async processCreateAd(job: Job<GenerationJobData>): Promise<void> {
-		const { user_id, brand_id, product_id, concept_id, important_notes, generated_ad_id } = job.data;
+		const { user_id, brand_id, product_id, concept_id, important_notes, generated_ad_id, variation_index } = job.data;
 
 		this.logger.log(`Processing generation job: ${generated_ad_id}`);
 
@@ -91,6 +91,7 @@ export class GenerationProcessor extends WorkerHost {
 					product,
 					concept,
 					important_notes || '',
+					variation_index || 0, // Pass variation index (default 0)
 				);
 			}
 

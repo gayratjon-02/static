@@ -67,9 +67,10 @@ export class ClaudeService {
 		product: Product,
 		concept: AdConcept,
 		importantNotes: string,
+		variationIndex: number = 0,
 	): Promise<ClaudeResponseJson> {
 		const systemPrompt = await this.getSystemPrompt();
-		const userPrompt = this.buildUserPrompt(brand, product, concept, importantNotes);
+		const userPrompt = this.buildUserPrompt(brand, product, concept, importantNotes, variationIndex);
 
 		this.logger.log('Sending single ad request to Claude API...');
 
@@ -324,13 +325,55 @@ Generate EXACTLY 6 unique variations as a JSON object with a "variations" array.
 	/**
 	 * Single ad uchun user prompt (fixErrors, regenerateSingle uchun).
 	 */
+	/**
+	 * Single ad uchun user prompt (fixErrors, regenerateSingle uchun).
+	 */
 	private buildUserPrompt(
 		brand: Brand,
 		product: Product,
 		concept: AdConcept,
 		importantNotes: string,
+		variationIndex: number = 0,
 	): string {
+		// Detect Concept Category
+		const isFeatureCallout = concept.category?.toLowerCase().includes('feature') || concept.category?.toLowerCase().includes('callout');
+		const isComparison = concept.category?.toLowerCase().includes('comparison') || concept.category?.toLowerCase().includes('us vs them');
+
+		// Variation Styles (0-5)
+		const styles = [
+			"Balanced & Clean: Balanced composition with ample whitespace.",
+			"Bold & High Contrast: Use strong contrast with brand colors for maximum impact.",
+			"Gradient & Dynamic: Use brand gradients and dynamic shapes.",
+			"Minimalist: absolute essential elements only, very clean.",
+			"Detailed & Informative: richer detail in callouts, structured layout.",
+			"Lifestyle/Contextual: If possible, imply usage context or soft background elements."
+		];
+		const currentStyle = styles[variationIndex % styles.length];
+
+		let specificInstructions = "";
+		if (isFeatureCallout) {
+			specificInstructions = `
+=== FEATURE CALLOUT RULES (Category: ${concept.category}) ===
+1. **Layout**: CENTER the product photo. It must be the hero.
+2. **Callouts**: Place 3 to 5 callout bubbles AROUND the product.
+   - Prefer 4 callouts if USPs allow.
+   - Bubbles must NOT overlap the product.
+   - Text inside bubbles must be legible and auto-scaled (no fixed font sizes).
+3. **Hierarchy**:
+   - Headline: Top Center or Top Left (Max 5-9 words).
+   - CTA: Distinct button style, placed clearly (Bottom Center or aligned with Offer).
+   - If an Offer exists (${product.offer_text || 'N/A'}), display it in a badge or integrated into the CTA, do not clutter.
+4. **Safety**: DO NOT use medical claims (cure, treat, heal). Use "support", "help", "promote".
+`;
+		}
+
 		return `Create a Facebook ad creative based on the following:
+		
+=== VARIATION SETTINGS ===
+Variation Index: ${variationIndex + 1}/6
+Visual Style: ${currentStyle}
+
+${specificInstructions}
 
 === BRAND ===
 Name: ${brand.name}
@@ -363,7 +406,10 @@ ${concept.image_url ? `Reference Image: ${concept.image_url}` : ''}
 
 ${importantNotes ? `=== USER NOTES ===\n${importantNotes}` : ''}
 
-Generate the ad creative as JSON. The gemini_image_prompt should be highly detailed, describing a 1080x1080 static image ad with text overlays, product placement, and the brand's color scheme.`;
+Generate the ad creative as JSON. 
+The gemini_image_prompt must be EXTREMELY detailed and follow the "Visual Style" and "Category Rules" defined above.
+It must describe a 1080x1080 static image ad with text overlays, product placement, and the brand's color scheme.
+Ensure the layout is robust and does not rely on hardcoded pixel coordinates.`;
 	}
 
 	/**
