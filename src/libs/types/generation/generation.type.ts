@@ -70,7 +70,8 @@ export interface AdCopyJson {
 
 /** createGeneration endpoint response */
 export interface Generation {
-	job_id: string;
+	job_id: string; // Helper for frontend (ID of first ad or batch ID)
+	batch_id: string;
 	status: GenerationStatus;
 	message: string;
 }
@@ -85,6 +86,13 @@ export interface GenerationStatusResponse {
 	ad_copy_json: AdCopyJson | null;
 	ad_name: string | null;
 	created_at: Date;
+}
+
+/** getBatchStatus endpoint response */
+export interface GenerationBatchResponse {
+	batch_id: string;
+	status: GenerationStatus; // 'completed' only if all variations are completed/failed
+	variations: GenerationStatusResponse[];
 }
 
 /** getResults endpoint response — to'liq natija */

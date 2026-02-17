@@ -9,7 +9,7 @@ import { CreateGenerationDto } from '../../libs/dto/generation/create-generation
 import { GetGenerationsDto } from '../../libs/dto/generation/get-generations.dto';
 import { FixErrorsDto } from '../../libs/dto/generation/fix-errors.dto';
 import { Member } from '../../libs/types/member/member.type';
-import { Generation, GenerationStatusResponse, GenerationResultsResponse, ExportRatiosResponse } from '../../libs/types/generation/generation.type';
+import { Generation, GenerationStatusResponse, GenerationResultsResponse, ExportRatiosResponse, GenerationBatchResponse } from '../../libs/types/generation/generation.type';
 
 @Controller('generation')
 export class GenerationController {
@@ -33,6 +33,15 @@ export class GenerationController {
 		@AuthMember() authMember: Member,
 	): Promise<GenerationStatusResponse> {
 		return this.generationService.getStatus(jobId, authMember);
+	}
+
+	@UseGuards(AuthGuard)
+	@Get('getBatchStatus/:batchId')
+	public async getBatchStatus(
+		@Param('batchId') batchId: string,
+		@AuthMember() authMember: Member,
+	): Promise<GenerationBatchResponse> {
+		return this.generationService.getBatchStatus(batchId, authMember);
 	}
 
 	@UseGuards(AuthGuard)

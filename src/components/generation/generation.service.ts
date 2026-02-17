@@ -66,25 +66,29 @@ export class GenerationService {
 				throw new BadRequestException(Message.CONCEPT_NOT_FOUND);
 			}
 
-			// 4. generated_ads jadvaliga yangi row yaratish (status: pending)
-			const { data: generatedAd, error: insertError } = await this.databaseService.client
-				.from('generated_ads')
-				.insert({
-					user_id: authMember._id,
-					brand_id: brand_id,
-					product_id: product_id,
-					concept_id: concept_id,
-					important_notes: important_notes || '',
-					claude_response_json: {},
-					gemini_prompt: '',
-					ad_copy_json: {},
-					generation_status: GenerationStatus.PENDING,
-				})
-				.select('_id')
-				.single();
+			// 4. Batch creation (6 variations)
+			const batchId = uuidv4();
+			const variations = Array.from({ length: 6 }).map((_, i) => ({
+				user_id: authMember._id,
+				brand_id: brand_id,
+				product_id: product_id,
+				concept_id: concept_id,
+				important_notes: important_notes || '',
+				claude_response_json: {},
+				gemini_prompt: '',
+				ad_copy_json: {},
+				generation_status: GenerationStatus.PENDING,
+				batch_id: batchId,
+				variation_index: i,
+			}));
 
-			if (insertError || !generatedAd) {
-				this.logger.error(`Failed to create generated ad: ${insertError?.message}`);
+			const { data: generatedAds, error: insertError } = await this.databaseService.client
+				.from('generated_ads')
+				.insert(variations)
+				.select('_id');
+
+			if (insertError || !generatedAds || generatedAds.length === 0) {
+				this.logger.error(`Failed to create generated ads batch: ${insertError?.message}`);
 				throw new InternalServerErrorException(Message.CREATE_FAILED);
 			}
 
@@ -96,7 +100,7 @@ export class GenerationService {
 				.single();
 
 			if (userError || !userData) {
-				await this.databaseService.client.from('generated_ads').delete().eq('_id', generatedAd._id);
+				await this.databaseService.client.from('generated_ads').delete().in('_id', generatedAds.map(a => a._id));
 				throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
 			}
 
@@ -104,7 +108,7 @@ export class GenerationService {
 				(userData.credits_limit - userData.credits_used) + (userData.addon_credits_remaining || 0);
 
 			if (creditsRemaining < GENERATION_CREDIT_COST) {
-				await this.databaseService.client.from('generated_ads').delete().eq('_id', generatedAd._id);
+				await this.databaseService.client.from('generated_ads').delete().in('_id', generatedAds.map(a => a._id));
 				throw new BadRequestException(Message.INSUFFICIENT_CREDITS);
 			}
 
@@ -116,7 +120,7 @@ export class GenerationService {
 				.eq('_id', authMember._id);
 
 			if (updateCreditError) {
-				await this.databaseService.client.from('generated_ads').delete().eq('_id', generatedAd._id);
+				await this.databaseService.client.from('generated_ads').delete().in('_id', generatedAds.map(a => a._id));
 				throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
 			}
 
@@ -125,45 +129,73 @@ export class GenerationService {
 				user_id: authMember._id,
 				credits_amount: -GENERATION_CREDIT_COST,
 				transaction_type: 'generation',
-				reference_id: generatedAd._id,
-				reference_type: 'generated_ad',
+				reference_id: batchId, // Use batch_id as reference
+				reference_type: 'generated_ad_batch',
 				balance_before: creditsRemaining,
 				balance_after: creditsRemaining - GENERATION_CREDIT_COST,
 			}).then(({ error }) => {
 				if (error) this.logger.warn(`credit_transactions insert failed (non-blocking): ${error.message}`);
 			});
 
-			// 7. BullMQ queue'ga job qo'shish
-			const jobData: GenerationJobData = {
-				user_id: authMember._id,
-				brand_id: brand_id,
-				product_id: product_id,
-				concept_id: concept_id,
-				important_notes: important_notes || '',
-				generated_ad_id: generatedAd._id,
-			};
-
-			await this.generationQueue.add('create-ad', jobData, {
-				attempts: 2,
-				backoff: {
-					type: 'exponential',
-					delay: 5000,
+			// 7. BullMQ queue'ga job qo'shish (6 ta job)
+			const jobs = generatedAds.map((ad, i) => ({
+				name: 'create-ad',
+				data: {
+					user_id: authMember._id,
+					brand_id,
+					product_id,
+					concept_id,
+					important_notes: important_notes || '',
+					generated_ad_id: ad._id,
+					batch_id: batchId,
+					variation_index: i,
 				},
-				removeOnComplete: true,
-				removeOnFail: false,
-			});
+				opts: {
+					attempts: 2,
+					backoff: { type: 'exponential', delay: 5000 },
+					removeOnComplete: true,
+					removeOnFail: false,
+				},
+			}));
 
-			this.logger.log(`Generation job queued: ${generatedAd._id}`);
+			await this.generationQueue.addBulk(jobs);
+
+			this.logger.log(`Generation batch queued: ${batchId} (${generatedAds.length} variations)`);
 
 			// 8. Response qaytarish
 			return {
-				job_id: generatedAd._id,
+				job_id: batchId, // Returning batch_id as job_id for frontend compatibility
+				batch_id: batchId,
 				status: GenerationStatus.PENDING,
 				message: Message.GENERATION_STARTED,
 			};
 		} catch (err) {
 			throw err;
 		}
+	}
+
+	public async getBatchStatus(batchId: string, authMember: Member): Promise<import('../../libs/types/generation/generation.type').GenerationBatchResponse> {
+		const { data, error } = await this.databaseService.client
+			.from('generated_ads')
+			.select('_id, generation_status, image_url_1x1, image_url_9x16, image_url_16x9, ad_copy_json, ad_name, created_at')
+			.eq('batch_id', batchId)
+			.eq('user_id', authMember._id)
+			.order('variation_index', { ascending: true });
+
+		if (error || !data || data.length === 0) {
+			// Fallback: Check if validation failed or just not found
+			throw new BadRequestException(Message.GENERATION_NOT_FOUND);
+		}
+
+		// Calculate overall status
+		const allDone = data.every(d => d.generation_status === GenerationStatus.COMPLETED || d.generation_status === GenerationStatus.FAILED);
+		const status = allDone ? GenerationStatus.COMPLETED : GenerationStatus.PROCESSING;
+
+		return {
+			batch_id: batchId,
+			status,
+			variations: data as any[],
+		};
 	}
 
 	public async getStatus(jobId: string, authMember: Member): Promise<GenerationStatusResponse> {
@@ -300,6 +332,7 @@ export class GenerationService {
 
 		return {
 			job_id: newAd._id,
+			batch_id: newAd._id, // Single item acts as its own batch
 			status: GenerationStatus.PENDING,
 			message: Message.GENERATION_STARTED,
 		};
@@ -407,6 +440,7 @@ export class GenerationService {
 
 		return {
 			job_id: newAd._id,
+			batch_id: newAd._id, // Single item acts as its own batch
 			status: GenerationStatus.PENDING,
 			message: Message.GENERATION_STARTED,
 		};
