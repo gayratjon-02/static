@@ -490,12 +490,12 @@ export class GenerationService {
 		const conceptIds = [...new Set(data.map(d => d.concept_id))];
 
 		const [brandsRes, conceptsRes] = await Promise.all([
-			this.databaseService.client.from('brands').select('_id, brand_name').in('_id', brandIds),
-			this.databaseService.client.from('ad_concepts').select('_id, label').in('_id', conceptIds),
+			this.databaseService.client.from('brands').select('_id, name').in('_id', brandIds),
+			this.databaseService.client.from('ad_concepts').select('_id, name').in('_id', conceptIds),
 		]);
 
-		const brandMap = new Map(brandsRes.data?.map(b => [b._id, b.brand_name]));
-		const conceptMap = new Map(conceptsRes.data?.map(c => [c._id, c.label]));
+		const brandMap = new Map(brandsRes.data?.map(b => [b._id, b.name]));
+		const conceptMap = new Map(conceptsRes.data?.map(c => [c._id, c.name]));
 
 		return data.map(ad => ({
 			_id: ad._id,
@@ -547,14 +547,14 @@ export class GenerationService {
 		const conceptIds = [...new Set(data.map(d => d.concept_id))];
 
 		const [brandsRes, productsRes, conceptsRes] = await Promise.all([
-			this.databaseService.client.from('brands').select('_id, brand_name, brand_colors').in('_id', brandIds),
-			this.databaseService.client.from('products').select('_id, product_name').in('_id', productIds),
-			this.databaseService.client.from('ad_concepts').select('_id, label').in('_id', conceptIds),
+			this.databaseService.client.from('brands').select('_id, name, primary_color').in('_id', brandIds),
+			this.databaseService.client.from('products').select('_id, name').in('_id', productIds),
+			this.databaseService.client.from('ad_concepts').select('_id, name').in('_id', conceptIds),
 		]);
 
-		const brandMap = new Map(brandsRes.data?.map(b => [b._id, { name: b.brand_name, color: b.brand_colors?.[0] || '#3ECFCF' }]));
-		const productMap = new Map(productsRes.data?.map(p => [p._id, p.product_name]));
-		const conceptMap = new Map(conceptsRes.data?.map(c => [c._id, c.label]));
+		const brandMap = new Map(brandsRes.data?.map(b => [b._id, { name: b.name, color: b.primary_color || '#3ECFCF' }]));
+		const productMap = new Map(productsRes.data?.map(p => [p._id, p.name]));
+		const conceptMap = new Map(conceptsRes.data?.map(c => [c._id, c.name]));
 
 		const list = data.map(ad => {
 			const brand = brandMap.get(ad.brand_id);
@@ -580,13 +580,13 @@ export class GenerationService {
 		// 1. Get all brands with counts
 		const { data: brands, error: brandError } = await this.databaseService.client
 			.from('brands')
-			.select('_id, brand_name, brand_colors')
+			.select('_id, name, primary_color')
 			.eq('user_id', authMember._id);
 
 		// 2. Get all products with counts
 		const { data: products, error: productError } = await this.databaseService.client
 			.from('products')
-			.select('_id, product_name, brand_id')
+			.select('_id, name, brand_id')
 			.in('brand_id', brands?.map(b => b._id) || []); // Only products for user's brands
 
 		if (brandError || productError) throw new InternalServerErrorException(Message.SOMETHING_WENT_WRONG);
@@ -613,16 +613,14 @@ export class GenerationService {
 
 		const brandsWithCount = brands?.map(b => ({
 			_id: b._id,
-			name: b.brand_name,
-			color: b.brand_colors?.[0] || '#3ECFCF',
+			name: b.name,
+			color: b.primary_color || '#3ECFCF',
 			count: brandCounts[b._id] || 0
 		})).filter(b => b.count > 0) || [];
-		// Should we show brands with 0 ads? Design implies "All Brands 16", "Bron 24" -> likely implies existing ads.
-		// Let's return all brands but sort by count desc
 
 		const productsWithCount = products?.map(p => ({
 			_id: p._id,
-			name: p.product_name,
+			name: p.name,
 			brand_id: p.brand_id,
 			count: productCounts[p._id] || 0
 		})).filter(p => p.count > 0) || [];
