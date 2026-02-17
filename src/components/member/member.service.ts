@@ -207,10 +207,10 @@ export class MemberService {
 
 		const { data: brands } = await this.databaseService.client
 			.from('brands')
-			.select('_id, brand_name')
+			.select('_id, name')
 			.in('_id', uniqueBrandIds);
 
-		const brandMap = new Map(brands?.map(b => [b._id, b.brand_name]));
+		const brandMap = new Map(brands?.map(b => [b._id, b.name]));
 
 		// Map transactions to readable activity
 		return data.map(t => {
