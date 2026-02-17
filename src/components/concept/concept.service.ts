@@ -9,12 +9,43 @@ import { Message } from '../../libs/enums/common.enum';
 import { T } from '../../libs/types/common';
 import { AdConcept, ConceptCategoryItem } from '../../libs/types/concept/concept.type';
 
+// Fallback categories for when DB migration hasn't run.
+// These UUIDs allow the frontend to select categories even if the table is missing.
+const FALLBACK_CATEGORIES: ConceptCategoryItem[] = [
+	{ _id: '11111111-1111-1111-1111-111111111111', slug: 'social_proof', name: 'Social Proof', display_order: 1, created_at: new Date(), updated_at: new Date(), description: 'Review count, star ratings, badges' },
+	{ _id: '22222222-2222-2222-2222-222222222222', slug: 'before_after', name: 'Before & After', display_order: 2, created_at: new Date(), updated_at: new Date(), description: 'Split-screen transformation comparison' },
+	{ _id: '33333333-3333-3333-3333-333333333333', slug: 'feature_callout', name: 'Feature Callout', display_order: 3, created_at: new Date(), updated_at: new Date(), description: 'Callout arrows/lines pointing to product features' },
+	{ _id: '44444444-4444-4444-4444-444444444444', slug: 'listicle', name: 'Listicle', display_order: 4, created_at: new Date(), updated_at: new Date(), description: 'Numbered list of benefits or features' },
+	{ _id: '55555555-5555-5555-5555-555555555555', slug: 'comparison', name: 'Comparison', display_order: 5, created_at: new Date(), updated_at: new Date(), description: 'Side-by-side brand comparison' },
+	{ _id: '66666666-6666-6666-6666-666666666666', slug: 'ugc_style', name: 'UGC Style', display_order: 6, created_at: new Date(), updated_at: new Date(), description: 'Casual, native-looking creative' },
+	{ _id: '77777777-7777-7777-7777-777777777777', slug: 'editorial', name: 'Editorial', display_order: 7, created_at: new Date(), updated_at: new Date(), description: 'Educational content as an ad' },
+	{ _id: '88888888-8888-8888-8888-888888888888', slug: 'bold_offer', name: 'Bold Offer', display_order: 8, created_at: new Date(), updated_at: new Date(), description: 'Discount, sale, limited-time offer' },
+	{ _id: '99999999-9999-9999-9999-999999999999', slug: 'minimalist', name: 'Minimalist', display_order: 9, created_at: new Date(), updated_at: new Date(), description: 'Clean, minimal design with focus on product' },
+	{ _id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', slug: 'lifestyle', name: 'Lifestyle', display_order: 10, created_at: new Date(), updated_at: new Date(), description: 'Product shown in context' },
+];
+
 @Injectable()
 export class ConceptService {
 	constructor(
 		private databaseService: DatabaseService,
 		private conceptConfig: ConceptConfigService,
 	) { }
+
+	// Helper to map old "category" slug column back to "category_id" UUID
+	private normalizeConcept(concept: any): AdConcept {
+		if (!concept) return concept;
+		// If concept has legacy "category" string but no category_id, map it shim ID
+		if (concept.category && !concept.category_id) {
+			const shim = FALLBACK_CATEGORIES.find(c => c.slug === concept.category);
+			if (shim) {
+				concept.category_id = shim._id;
+				// Frontend uses category_name for display
+				// If join failed (missing table), we don't have category_name from join
+				if (!concept.category_name) concept.category_name = shim.name;
+			}
+		}
+		return concept as AdConcept;
+	}
 
 	// =============================================
 	// CATEGORIES
@@ -29,14 +60,13 @@ export class ConceptService {
 				.order('display_order', { ascending: true });
 
 			if (error) {
-				// Table may not exist yet — return empty gracefully
-				console.log('getCategories warning:', error.message);
-				return { list: [] };
+				console.log('getCategories failed (likely missing table), using fallback shim.');
+				return { list: FALLBACK_CATEGORIES };
 			}
 
 			return { list: (data as ConceptCategoryItem[]) || [] };
 		} catch {
-			return { list: [] };
+			return { list: FALLBACK_CATEGORIES };
 		}
 	}
 
@@ -72,20 +102,24 @@ export class ConceptService {
 
 		if (error || !data) {
 			console.log('Supabase createCategory error:', error);
-			throw new InternalServerErrorException(Message.CREATE_FAILED);
+			throw new InternalServerErrorException(Message.CREATE_FAILED + ' (Table might be missing)');
 		}
 
 		return data as ConceptCategoryItem;
 	}
 
 	private async getNextCategoryOrder(): Promise<number> {
-		const { data } = await this.databaseService.client
-			.from('concept_categories')
-			.select('display_order')
-			.order('display_order', { ascending: false })
-			.limit(1);
+		try {
+			const { data } = await this.databaseService.client
+				.from('concept_categories')
+				.select('display_order')
+				.order('display_order', { ascending: false })
+				.limit(1);
 
-		return (data?.[0]?.display_order ?? 0) + 1;
+			return (data?.[0]?.display_order ?? 0) + 1;
+		} catch {
+			return 1;
+		}
 	}
 
 	// =============================================
@@ -117,8 +151,17 @@ export class ConceptService {
 		}
 
 		if (categoryId) {
-			countQuery = countQuery.eq('category_id', categoryId);
-			dataQuery = dataQuery.eq('category_id', categoryId);
+			// Check if this is a fallback shim ID
+			const shim = FALLBACK_CATEGORIES.find(c => c._id === categoryId);
+			if (shim) {
+				// Query by legacy 'category' column
+				countQuery = countQuery.eq('category', shim.slug);
+				dataQuery = dataQuery.eq('category', shim.slug);
+			} else {
+				// Query by real relationship
+				countQuery = countQuery.eq('category_id', categoryId);
+				dataQuery = dataQuery.eq('category_id', categoryId);
+			}
 		}
 
 		if (search) {
@@ -151,26 +194,41 @@ export class ConceptService {
 			throw new InternalServerErrorException(Message.NO_DATA_FOUND);
 		}
 
-		return { list: (data || []) as AdConcept[], total: count || 0 };
+		// Normalize data (add shim IDs if needed)
+		const list = (data || []).map(c => this.normalizeConcept(c));
+
+		return { list, total: count || 0 };
 	}
 
 	/** Create a new concept */
 	public async createConcept(input: CreateConceptDto): Promise<AdConcept> {
 		const displayOrder = input.display_order ?? await this.getNextConceptOrder(input.category_id);
 
+		// Prepare insert payload
+		const insertData: any = {
+			name: input.name,
+			image_url: input.image_url,
+			tags: input.tags,
+			description: input.description || null,
+			source_url: input.source_url || '',
+			is_active: input.is_active ?? true,
+			display_order: displayOrder,
+			usage_count: 0,
+		};
+
+		// Check if we need to use legacy 'category' column
+		const shim = FALLBACK_CATEGORIES.find(c => c._id === input.category_id);
+		if (shim) {
+			insertData.category = shim.slug;
+			// Do NOT send category_id, it might not exist in table
+			delete insertData.category_id;
+		} else {
+			insertData.category_id = input.category_id;
+		}
+
 		const { data, error } = await this.databaseService.client
 			.from('ad_concepts')
-			.insert({
-				category_id: input.category_id,
-				name: input.name,
-				image_url: input.image_url,
-				tags: input.tags,
-				description: input.description || null,
-				source_url: input.source_url || '',
-				is_active: input.is_active ?? true,
-				display_order: displayOrder,
-				usage_count: 0,
-			})
+			.insert(insertData)
 			.select('*')
 			.single();
 
@@ -179,7 +237,7 @@ export class ConceptService {
 			throw new InternalServerErrorException(Message.CREATE_FAILED);
 		}
 
-		return data as AdConcept;
+		return this.normalizeConcept(data);
 	}
 
 	private async getNextConceptOrder(categoryId?: string): Promise<number> {
@@ -190,7 +248,12 @@ export class ConceptService {
 			.limit(1);
 
 		if (categoryId) {
-			query = query.eq('category_id', categoryId);
+			const shim = FALLBACK_CATEGORIES.find(c => c._id === categoryId);
+			if (shim) {
+				query = query.eq('category', shim.slug);
+			} else {
+				query = query.eq('category_id', categoryId);
+			}
 		}
 
 		const { data } = await query;
@@ -210,11 +273,22 @@ export class ConceptService {
 		}
 
 		const updateData: T = {};
-		const fields = ['category_id', 'name', 'image_url', 'tags', 'description', 'source_url', 'is_active', 'display_order'];
+		const fields = ['name', 'image_url', 'tags', 'description', 'source_url', 'is_active', 'display_order'];
 
 		for (const field of fields) {
 			if (input[field] !== undefined) {
 				updateData[field] = input[field];
+			}
+		}
+
+		// Handle category update specially
+		if (input.category_id !== undefined) {
+			const shim = FALLBACK_CATEGORIES.find(c => c._id === input.category_id);
+			if (shim) {
+				updateData.category = shim.slug;
+				// Don't send category_id
+			} else {
+				updateData.category_id = input.category_id;
 			}
 		}
 
@@ -234,7 +308,7 @@ export class ConceptService {
 			throw new InternalServerErrorException(Message.UPDATE_FAILED);
 		}
 
-		return data as AdConcept;
+		return this.normalizeConcept(data);
 	}
 
 	/** Delete a concept (hard delete — soft delete available after migration 003) */
@@ -273,7 +347,7 @@ export class ConceptService {
 			throw new BadRequestException('No items to reorder');
 		}
 
-		// Sequential updates (will use RPC after migration 003 is run)
+		// Sequential updates (RPC migration is missing)
 		for (const item of items) {
 			const { error } = await this.databaseService.client
 				.from('ad_concepts')
@@ -293,7 +367,7 @@ export class ConceptService {
 	// USAGE TRACKING
 	// =============================================
 
-	/** Increment usage_count (will use atomic RPC after migration 003 is run) */
+	/** Increment usage_count */
 	public async incrementUsage(id: string): Promise<{ usage_count: number }> {
 		const { data: concept, error: findError } = await this.databaseService.client
 			.from('ad_concepts')
@@ -339,6 +413,7 @@ export class ConceptService {
 			return { list: [] };
 		}
 
-		return { list: (data || []) as AdConcept[] };
+		// Normalize data
+		return { list: (data || []).map(c => this.normalizeConcept(c as AdConcept)) };
 	}
 }
