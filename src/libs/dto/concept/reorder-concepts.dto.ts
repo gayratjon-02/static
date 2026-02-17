@@ -20,7 +20,7 @@ export class ReorderItem {
 }
 
 export class ReorderConceptsDto {
-    @IsUUID()
+    @IsString()
     @IsNotEmpty()
     category_id: string;
 

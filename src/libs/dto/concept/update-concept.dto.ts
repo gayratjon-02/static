@@ -12,7 +12,7 @@ import {
 } from 'class-validator';
 
 export class UpdateConceptDto {
-	@IsUUID()
+	@IsString()
 	@IsOptional()
 	category_id?: string;
 

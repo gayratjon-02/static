@@ -13,7 +13,7 @@ import {
 } from 'class-validator';
 
 export class CreateConceptDto {
-	@IsUUID()
+	@IsString()
 	@IsNotEmpty()
 	category_id: string;
 

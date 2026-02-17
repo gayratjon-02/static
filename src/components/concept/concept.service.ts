@@ -11,6 +11,9 @@ import { AdConcept, ConceptCategoryItem } from '../../libs/types/concept/concept
 
 // Fallback categories for when DB migration hasn't run.
 // These UUIDs allow the frontend to select categories even if the table is missing.
+// Fallback categories for when DB migration hasn't run.
+// These UUIDs allow the frontend to select categories even if the table is missing.
+// Matches the "PDF Spec" list provided by user + migration 002 list.
 const FALLBACK_CATEGORIES: ConceptCategoryItem[] = [
 	{ _id: '11111111-1111-1111-1111-111111111111', slug: 'social_proof', name: 'Social Proof', display_order: 1, created_at: new Date(), updated_at: new Date(), description: 'Review count, star ratings, badges' },
 	{ _id: '22222222-2222-2222-2222-222222222222', slug: 'before_after', name: 'Before & After', display_order: 2, created_at: new Date(), updated_at: new Date(), description: 'Split-screen transformation comparison' },
@@ -22,6 +25,18 @@ const FALLBACK_CATEGORIES: ConceptCategoryItem[] = [
 	{ _id: '88888888-8888-8888-8888-888888888888', slug: 'bold_offer', name: 'Bold Offer', display_order: 8, created_at: new Date(), updated_at: new Date(), description: 'Discount, sale, limited-time offer' },
 	{ _id: '99999999-9999-9999-9999-999999999999', slug: 'minimalist', name: 'Minimalist', display_order: 9, created_at: new Date(), updated_at: new Date(), description: 'Clean, minimal design with focus on product' },
 	{ _id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', slug: 'lifestyle', name: 'Lifestyle', display_order: 10, created_at: new Date(), updated_at: new Date(), description: 'Product shown in context' },
+	{ _id: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb', slug: 'feature_pointers', name: 'Feature Pointers', display_order: 11, created_at: new Date(), updated_at: new Date(), description: 'Callout arrows/lines pointing to product features' },
+	{ _id: 'cccccccc-cccc-cccc-cccc-cccccccccccc', slug: 'testimonial', name: 'Testimonial', display_order: 12, created_at: new Date(), updated_at: new Date(), description: 'Customer quote overlaid on product image' },
+	{ _id: 'dddddddd-dddd-dddd-dddd-dddddddddddd', slug: 'us_vs_them', name: 'Us vs. Them', display_order: 13, created_at: new Date(), updated_at: new Date(), description: 'Side-by-side brand comparison' },
+	{ _id: 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee', slug: 'stat_data', name: 'Stat / Data', display_order: 14, created_at: new Date(), updated_at: new Date(), description: 'Bold statistic or data point' },
+	{ _id: 'ffffffff-ffff-ffff-ffff-ffffffffffff', slug: 'unboxing_flat_lay', name: 'Unboxing / Flat Lay', display_order: 15, created_at: new Date(), updated_at: new Date(), description: 'Product packaging display' },
+	{ _id: '10101010-1010-1010-1010-101010101010', slug: 'ingredient_spotlight', name: 'Ingredient Spotlight', display_order: 16, created_at: new Date(), updated_at: new Date(), description: 'Close-up on key ingredients' },
+	{ _id: '20202020-2020-2020-2020-202020202020', slug: 'offer_promo', name: 'Offer / Promo', display_order: 17, created_at: new Date(), updated_at: new Date(), description: 'Discount, sale, limited-time offer' },
+	{ _id: '30303030-3030-3030-3030-303030303030', slug: 'problem_solution', name: 'Problem → Solution', display_order: 18, created_at: new Date(), updated_at: new Date(), description: 'Pain point then presents product' },
+	{ _id: '40404040-4040-4040-4040-404040404040', slug: 'founder_brand_story', name: 'Founder / Brand Story', display_order: 19, created_at: new Date(), updated_at: new Date(), description: 'Personal message from founder' },
+	{ _id: '50505050-5050-5050-5050-505050505050', slug: 'infographic', name: 'Infographic', display_order: 20, created_at: new Date(), updated_at: new Date(), description: 'Educational content as an ad' },
+	{ _id: '60606060-6060-6060-6060-606060606060', slug: 'meme_ugc_style', name: 'Meme / UGC Style', display_order: 21, created_at: new Date(), updated_at: new Date(), description: 'Casual, native-looking creative' },
+	{ _id: '70707070-7070-7070-7070-707070707070', slug: 'comparison_chart', name: 'Comparison Chart', display_order: 22, created_at: new Date(), updated_at: new Date(), description: 'Feature comparison table/grid' },
 ];
 
 @Injectable()
@@ -150,9 +165,10 @@ export class ConceptService {
 			dataQuery = dataQuery.eq('is_active', true);
 		}
 
+
 		if (categoryId) {
-			// Check if this is a fallback shim ID
-			const shim = FALLBACK_CATEGORIES.find(c => c._id === categoryId);
+			// Check if this is a fallback shim ID, slug, or name
+			const shim = FALLBACK_CATEGORIES.find(c => c._id === categoryId || c.slug === categoryId || c.name === categoryId);
 			if (shim) {
 				// Query by legacy 'category' column
 				countQuery = countQuery.eq('category', shim.slug);
@@ -216,8 +232,11 @@ export class ConceptService {
 			usage_count: 0,
 		};
 
+
 		// Check if we need to use legacy 'category' column
-		const shim = FALLBACK_CATEGORIES.find(c => c._id === input.category_id);
+		// Robust lookup: check ID, Slug, or Name
+		const shim = FALLBACK_CATEGORIES.find(c => c._id === input.category_id || c.slug === input.category_id || c.name === input.category_id);
+
 		if (shim) {
 			insertData.category = shim.slug;
 			// Do NOT send category_id, it might not exist in table
@@ -281,9 +300,10 @@ export class ConceptService {
 			}
 		}
 
+
 		// Handle category update specially
 		if (input.category_id !== undefined) {
-			const shim = FALLBACK_CATEGORIES.find(c => c._id === input.category_id);
+			const shim = FALLBACK_CATEGORIES.find(c => c._id === input.category_id || c.slug === input.category_id || c.name === input.category_id);
 			if (shim) {
 				updateData.category = shim.slug;
 				// Don't send category_id
