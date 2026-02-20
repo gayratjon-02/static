@@ -55,14 +55,14 @@ export class MemberService {
 		return await this.authService.adminLogin(input);
 	}
 
-	// forgetPassword method — parolni yangilash (login qilingan holda)
+	// forgetPassword — update password (when logged in)
 	public async forgetPassword(authmember: Member, input: ForgetPasswordDto): Promise<MemberResponse> {
 		const { password, confirm_password } = input;
 
-		// 1. Yangi parol va tasdiqlash bir xilligini tekshirish
+		// 1. Check new password and confirm match
 		if (password !== confirm_password) throw new BadRequestException(Message.PASSWORDS_DO_NOT_MATCH);
 
-		// 2. Joriy parol hash ini DB dan olish
+		// 2. Get current password hash from DB
 		const { data: userData, error } = await this.databaseService.client
 			.from('users')
 			.select('password_hash')
@@ -72,11 +72,11 @@ export class MemberService {
 
 		if (error || !userData) throw new InternalServerErrorException(Message.NO_DATA_FOUND);
 
-		// 3. Yangi parol joriy parol bilan bir xil bo'lmasligi kerak
+		// 3. New password must not be the same as current
 		const isSamePassword = await bcrypt.compare(password, userData.password_hash);
 		if (isSamePassword) throw new BadRequestException(Message.NEW_PASSWORD_SAME_AS_OLD);
 
-		// 4. Yangi parolni hash qilish va yangilash
+		// 4. Hash new password and update
 		const newPasswordHash = await this.authService.hashPassword(password);
 
 		const { data: updatedUser, error: updateError } = await this.databaseService.client
@@ -118,7 +118,7 @@ export class MemberService {
 	// updateMember method
 	public async updateMember(input: UpdateMemberDto, authMember: Member): Promise<MemberResponse> {
 		try {
-			// Yangilanish uchun fieldlarni yig'amiz
+			// Collect fields to update
 			const updateData: T = {};
 
 			if (input.full_name) {
@@ -159,8 +159,8 @@ export class MemberService {
 		}
 	}
 
-	// getUsage method — credit va obuna holati
-	// getUsage method — credit va obuna holati
+	// getUsage — credits and subscription status
+	// getUsage — credits and subscription status
 	public async getUsage(authMember: Member) {
 		try {
 			// 1. User subscription & credits
@@ -340,12 +340,12 @@ export class MemberService {
 		if (error) throw new InternalServerErrorException(Message.SOMETHING_WENT_WRONG);
 		if (!data || data.length === 0) return [];
 
-		// Reference ID larni yig'ish (faqat generated_ad uchun)
+		// Collect reference IDs (for generated_ad only)
 		const adIds = data.filter((t) => t.reference_type === 'generated_ad').map((t) => t.reference_id);
 
 		const uniqueAdIds = [...new Set(adIds)];
 
-		// Ad details olish
+		// Get ad details
 		const { data: ads } = await this.databaseService.client
 			.from('generated_ads')
 			.select('_id, ad_name, brand_id')
@@ -353,7 +353,7 @@ export class MemberService {
 
 		const adMap = new Map(ads?.map((ad) => [ad._id, ad]));
 
-		// Brand details olish
+		// Get brand details
 		const brandIds = ads?.map((ad) => ad.brand_id) || [];
 		const uniqueBrandIds = [...new Set(brandIds)];
 

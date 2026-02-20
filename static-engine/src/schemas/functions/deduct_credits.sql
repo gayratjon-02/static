@@ -18,7 +18,7 @@ DECLARE
   v_remaining INTEGER;
   v_new_credits_used INTEGER;
 BEGIN
-  -- Row-level lock bilan user'ni olish (FOR UPDATE)
+  -- Get user with row-level lock (FOR UPDATE)
   SELECT credits_used, credits_limit, addon_credits_remaining
   INTO v_credits_used, v_credits_limit, v_addon_credits
   FROM users

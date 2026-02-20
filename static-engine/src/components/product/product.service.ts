@@ -66,7 +66,7 @@ export class ProductService {
 	// getProducts method — brand bo'yicha productlar
 	public async getProducts(brandId: string, authMember: Member, page: number, limit: number) {
 		try {
-			// Brand ownership tekshirish
+			// Check brand ownership
 			const { data: brand, error: brandError } = await this.databaseService.client
 				.from('brands')
 				.select('_id')

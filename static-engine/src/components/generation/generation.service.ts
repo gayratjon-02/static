@@ -30,7 +30,7 @@ export class GenerationService {
 		const { brand_id, product_id, concept_id, important_notes } = input;
 
 		try {
-			// 1. Brand mavjudligini va ownership tekshirish
+			// 1. Check brand existence and ownership
 			const { data: brand, error: brandError } = await this.databaseService.client
 				.from('brands')
 				.select('_id')
@@ -42,7 +42,7 @@ export class GenerationService {
 				throw new BadRequestException(Message.BRAND_NOT_FOUND);
 			}
 
-			// 2. Product mavjudligini va brand'ga tegishliligini tekshirish
+			// 2. Check product existence and belonging to brand
 			const { data: product, error: productError } = await this.databaseService.client
 				.from('products')
 				.select('_id')
@@ -54,7 +54,7 @@ export class GenerationService {
 				throw new BadRequestException(Message.PRODUCT_NOT_FOUND);
 			}
 
-			// 3. Concept mavjudligini tekshirish
+			// 3. Check concept existence
 			const { data: concept, error: conceptError } = await this.databaseService.client
 				.from('ad_concepts')
 				.select('_id')
@@ -124,7 +124,7 @@ export class GenerationService {
 				throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
 			}
 
-			// 6. credit_transactions jadvaliga yozish (agar jadval mavjud bo'lsa)
+			// 6. Write to credit_transactions table (if table exists)
 			await this.databaseService.client.from('credit_transactions').insert({
 				user_id: authMember._id,
 				credits_amount: -GENERATION_CREDIT_COST,
@@ -137,7 +137,7 @@ export class GenerationService {
 				if (error) this.logger.warn(`credit_transactions insert failed (non-blocking): ${error.message}`);
 			});
 
-			// 7. Claude API — 1 ta chaqiruvda 6 ta variation olish (tezlashtirish)
+			// 7. Claude API — get 6 variations in one call (optimization)
 			this.logger.log(`Fetching brand/product/concept for Claude pre-generation...`);
 			const [brandData, productData, conceptData] = await Promise.all([
 				this.databaseService.client.from('brands').select('*').eq('_id', brand_id).single(),
@@ -171,7 +171,7 @@ export class GenerationService {
 				this.logger.warn(`Claude pre-generation failed, jobs will call Claude individually: ${claudeErr.message}`);
 			}
 
-			// 8. BullMQ queue'ga job qo'shish (6 ta job, Claude variation bilan)
+			// 8. Add jobs to BullMQ queue (6 jobs, each with Claude variation)
 			const jobs = generatedAds.map((ad, i) => ({
 				name: 'create-ad',
 				data: {
@@ -287,7 +287,7 @@ export class GenerationService {
 	}
 
 	public async fixErrors(adId: string, input: FixErrorsDto, authMember: Member): Promise<Generation> {
-		// 1. Original ad'ni olish va tekshirish
+		// 1. Get and validate original ad
 		const { data: originalAd, error: adError } = await this.databaseService.client
 			.from('generated_ads')
 			.select('_id, user_id, brand_id, product_id, concept_id, claude_response_json, gemini_prompt, generation_status')
@@ -303,7 +303,7 @@ export class GenerationService {
 			throw new BadRequestException(Message.GENERATION_NOT_COMPLETED);
 		}
 
-		// 2. Credit tekshirish va yechish
+		// 2. Check and deduct credit
 		const { data: userData, error: userError } = await this.databaseService.client
 			.from('users')
 			.select('credits_used, credits_limit, addon_credits_remaining')
@@ -321,7 +321,7 @@ export class GenerationService {
 			throw new BadRequestException(Message.INSUFFICIENT_CREDITS);
 		}
 
-		// 3. Yangi generated_ads row yaratish (fix versiyasi)
+		// 3. Create new generated_ads row (fix version)
 		const { data: newAd, error: insertError } = await this.databaseService.client
 			.from('generated_ads')
 			.insert({
@@ -354,7 +354,7 @@ export class GenerationService {
 			throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
 		}
 
-		// 5. credit_transactions yozish
+		// 5. Write to credit_transactions
 		await this.databaseService.client.from('credit_transactions').insert({
 			user_id: authMember._id,
 			credits_amount: -FIX_ERRORS_CREDIT_COST,
@@ -393,7 +393,7 @@ export class GenerationService {
 	}
 
 	public async regenerateSingle(adId: string, authMember: Member): Promise<Generation> {
-		// 1. Original ad olish va tekshirish
+		// 1. Get and validate original ad
 		const { data: originalAd, error: adError } = await this.databaseService.client
 			.from('generated_ads')
 			.select('_id, user_id, brand_id, product_id, concept_id, important_notes, generation_status')
@@ -409,7 +409,7 @@ export class GenerationService {
 			throw new BadRequestException(Message.GENERATION_NOT_COMPLETED);
 		}
 
-		// 2. Credit tekshirish
+		// 2. Check credit
 		const { data: userData, error: userError } = await this.databaseService.client
 			.from('users')
 			.select('credits_used, credits_limit, addon_credits_remaining')

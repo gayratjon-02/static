@@ -48,7 +48,7 @@ export class PromptTemplatesService {
 
         if (error || !data) {
             this.logger.error(`Prompt template update: ${error?.message}`);
-            throw new NotFoundException('Shablon topilmadi');
+            throw new NotFoundException('Template not found');
         }
         return data as PromptTemplateRow;
     }

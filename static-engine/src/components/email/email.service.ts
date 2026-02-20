@@ -10,7 +10,7 @@ export class EmailService {
 
     constructor(private readonly configService: ConfigService) {
         const apiKey = this.configService.get<string>('RESEND_API_KEY');
-        this.fromEmail = this.configService.get<string>('EMAIL_FROM') || 'Static Engine <[EMAIL_ADDRESS]>';
+        this.fromEmail = this.configService.get<string>('EMAIL_FROM') || 'Static Engine <onboarding@resend.dev>';
         if (apiKey) {
             this.resend = new Resend(apiKey);
         } else {
@@ -38,66 +38,66 @@ export class EmailService {
         }
     }
 
-    /** Xush kelibsiz email — signup da */
+    /** Welcome email — sent on signup */
     async sendWelcome(to: string, fullName: string): Promise<void> {
-        const subject = "Xush kelibsiz — Static Engine";
+        const subject = "Welcome — Static Engine";
         const html = `
-            <h2>Salom, ${fullName}!</h2>
-            <p>Siz muvaffaqiyatli ro'yxatdan o'tdingiz.</p>
-            <p>Obuna rejimini tanlash orqali reklama generatsiyasidan foydalanishni boshlashingiz mumkin.</p>
-            <p>Savollar bo'lsa, javob yozing.</p>
-            <p>— Static Engine jamoasi</p>
+            <h2>Hello, ${fullName}!</h2>
+            <p>You have successfully signed up.</p>
+            <p>Choose a subscription plan to start using ad generation.</p>
+            <p>If you have any questions, just reply to this email.</p>
+            <p>— The Static Engine team</p>
         `;
         await this.send(to, subject, html);
     }
 
-    /** Canva buyurtma tasdiqnomasi */
+    /** Canva order confirmation */
     async sendCanvaOrderConfirmation(to: string, orderId: string, fullName?: string): Promise<void> {
-        const subject = "Canva shablon buyurtmangiz qabul qilindi";
+        const subject = "Your Canva template order has been received";
         const html = `
-            <h2>Salom${fullName ? `, ${fullName}` : ''}!</h2>
-            <p>Canva shablon buyurtmangiz tasdiqlandi.</p>
-            <p>Buyurtma raqami: <strong>${orderId}</strong></p>
-            <p>Shablon tayyor bo'lgach, sizga link yuboriladi.</p>
-            <p>— Static Engine jamoasi</p>
+            <h2>Hello${fullName ? `, ${fullName}` : ''}!</h2>
+            <p>Your Canva template order has been confirmed.</p>
+            <p>Order ID: <strong>${orderId}</strong></p>
+            <p>We will send you the link once the template is ready.</p>
+            <p>— The Static Engine team</p>
         `;
         await this.send(to, subject, html);
     }
 
-    /** Canva bajarilganda link yuborish */
+    /** Send Canva link when order is fulfilled */
     async sendCanvaFulfilled(to: string, canvaLink: string, fullName?: string): Promise<void> {
-        const subject = "Canva shabloningiz tayyor";
+        const subject = "Your Canva template is ready";
         const html = `
-            <h2>Salom${fullName ? `, ${fullName}` : ''}!</h2>
-            <p>Canva shabloningiz tayyor.</p>
-            <p>Shablonni quyidagi link orqali oching:</p>
+            <h2>Hello${fullName ? `, ${fullName}` : ''}!</h2>
+            <p>Your Canva template is ready.</p>
+            <p>Open the template using the link below:</p>
             <p><a href="${canvaLink}" target="_blank">${canvaLink}</a></p>
-            <p>— Static Engine jamoasi</p>
+            <p>— The Static Engine team</p>
         `;
         await this.send(to, subject, html);
     }
 
-    /** Obuna bekor qilinganida ogohlantirish */
+    /** Notify when subscription is cancelled */
     async sendSubscriptionCancelled(to: string, fullName?: string): Promise<void> {
-        const subject = "Obunangiz bekor qilindi";
+        const subject = "Your subscription has been cancelled";
         const html = `
-            <h2>Salom${fullName ? `, ${fullName}` : ''}!</h2>
-            <p>Sizning obunangiz bekor qilindi.</p>
-            <p>Yana xizmatdan foydalanish uchun dashboard orqali yangi obuna olishingiz mumkin.</p>
-            <p>— Static Engine jamoasi</p>
+            <h2>Hello${fullName ? `, ${fullName}` : ''}!</h2>
+            <p>Your subscription has been cancelled.</p>
+            <p>You can subscribe again anytime from your dashboard.</p>
+            <p>— The Static Engine team</p>
         `;
         await this.send(to, subject, html);
     }
 
-    /** To'lov muvaffaqiyatsiz bo'lganda ogohlantirish */
+    /** Notify when payment fails */
     async sendPaymentFailed(to: string, fullName?: string): Promise<void> {
-        const subject = "To'lov muvaffaqiyatsiz — Static Engine";
+        const subject = "Payment failed — Static Engine";
         const html = `
-            <h2>Salom${fullName ? `, ${fullName}` : ''}!</h2>
-            <p>Obuna to'lovi amalga oshmadi.</p>
-            <p>Iltimos, to'lov usulingizni tekshiring yoki boshqa kartadan urinib ko'ring.</p>
-            <p>Dashboard orqali billing bo'limida to'lovni yangilashingiz mumkin.</p>
-            <p>— Static Engine jamoasi</p>
+            <h2>Hello${fullName ? `, ${fullName}` : ''}!</h2>
+            <p>Your subscription payment could not be processed.</p>
+            <p>Please check your payment method or try another card.</p>
+            <p>You can update your payment details in the billing section of your dashboard.</p>
+            <p>— The Static Engine team</p>
         `;
         await this.send(to, subject, html);
     }

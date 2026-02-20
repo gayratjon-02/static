@@ -24,7 +24,7 @@ export class AuthService {
 	public async signup(input: SignupDto): Promise<AuthResponse> {
 		const { email, password, full_name, avatar_url } = input;
 
-		// Signup har doim free tier bilan — to'lov qilgandan keyin webhook orqali yangilanadi
+		// Signup always starts with free tier — updated via webhook after payment
 		const tier = 'free';
 		const creditsLimit = 25;
 
@@ -67,7 +67,7 @@ export class AuthService {
 				if (error || !data) throw new BadRequestException(Message.CREATE_FAILED);
 				newUser = data;
 			} else {
-				// 3b. Yangi user yaratish (Free tier: 25 credits)
+				// 3b. Create new user (Free tier: 25 credits)
 				const { data, error } = await this.databaseService.client
 					.from('users')
 					.insert({
@@ -91,7 +91,7 @@ export class AuthService {
 				subscription_tier: newUser.subscription_tier,
 			});
 
-			// 5. Xush kelibsiz email (signup da)
+			// 5. Welcome email (on signup)
 			this.emailService.sendWelcome(newUser.email, newUser.full_name || '').catch(() => {});
 
 			// 6. remove password hash
@@ -131,7 +131,7 @@ export class AuthService {
 			const isMatch = await this.comparePasswords(password, user.password_hash);
 			if (!isMatch) throw new BadRequestException(Message.WRONG_PASSWORD);
 
-			// 4. Subscription tekshirish — login qilishga ruxsat, lekin needs_subscription flag qaytariladi
+			// 4. Check subscription — allow login but return needs_subscription flag
 			const PAID_TIERS = ['starter', 'pro', 'growth'];
 			const ALLOWED_STATUSES = ['active', 'trialing'];
 			const hasPaidSubscription = ALLOWED_STATUSES.includes(user.subscription_status)
@@ -197,7 +197,7 @@ export class AuthService {
 
 			if (error || !data) throw new BadRequestException(Message.CREATE_FAILED);
 
-			// 4. JWT token (is_admin flag bilan)
+			// 4. JWT token (with is_admin flag)
 			const accessToken = this.createToken({
 				id: data._id,
 				is_admin: true,
@@ -284,7 +284,7 @@ export class AuthService {
 			const secret = this.configService.get<string>('JWT_SECRET');
 			const decoded: any = jwt.verify(token, secret);
 
-			// Admin token ekanligini tekshirish
+			// Verify it is an admin token
 			if (!decoded.is_admin) throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
 
 			const { data, error } = await this.databaseService.client

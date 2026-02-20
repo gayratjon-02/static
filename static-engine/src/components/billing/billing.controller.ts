@@ -13,7 +13,7 @@ export class BillingController {
 
     /**
      * POST /billing/create-customer
-     * Authenticated user uchun Stripe Customer yaratadi.
+     * Creates Stripe Customer for the authenticated user.
      */
     @UseGuards(AuthGuard)
     @Post('create-customer')
@@ -27,7 +27,7 @@ export class BillingController {
 
     /**
      * POST /billing/create-checkout
-     * Stripe Checkout Session yaratadi va checkout_url qaytaradi.
+     * Creates Stripe Checkout Session and returns checkout_url.
      */
     @UseGuards(AuthGuard)
     @Post('create-checkout')
@@ -46,7 +46,7 @@ export class BillingController {
 
     /**
      * POST /billing/portal
-     * Stripe Customer Portal sessiyasi yaratadi.
+     * Creates Stripe Customer Portal session.
      */
     @UseGuards(AuthGuard)
     @Post('portal')
@@ -56,7 +56,7 @@ export class BillingController {
 
     /**
      * POST /billing/purchase-addon
-     * 100 kredit sotib olish uchun checkout sessiya.
+     * Checkout session for purchasing 100 credits addon.
      */
     @UseGuards(AuthGuard)
     @Post('purchase-addon')
@@ -70,7 +70,7 @@ export class BillingController {
 
     /**
      * POST /billing/create-canva-checkout/:adId
-     * Canva shablonini sotib olish uchun checkout sessiya.
+     * Checkout session for purchasing a Canva template.
      */
     @UseGuards(AuthGuard)
     @Post('create-canva-checkout/:adId')
@@ -88,8 +88,8 @@ export class BillingController {
 
     /**
      * POST /billing/verify-checkout
-     * Stripe'dan to'g'ridan-to'g'ri subscription holatini tekshiradi.
-     * Webhook kelmasa ham, bu endpoint orqali obunani aktivlashtirish mumkin.
+     * Verifies subscription status directly from Stripe.
+     * Can activate subscription via this endpoint if webhook is delayed.
      */
     @UseGuards(AuthGuard)
     @Post('verify-checkout')
@@ -99,7 +99,7 @@ export class BillingController {
 
     /**
      * GET /billing/plans
-     * Barcha aktiv subscription planlarni qaytaradi (public).
+     * Returns all active subscription plans (public).
      */
     @Get('plans')
     async getPlans() {

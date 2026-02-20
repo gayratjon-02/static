@@ -29,7 +29,7 @@ export class CanvaService {
             .single();
 
         if (!ad) {
-            throw new BadRequestException('Reklama topilmadi yoki sizga tegishli emas');
+            throw new BadRequestException('Ad not found or does not belong to you');
         }
 
         const { data: order, error } = await this.databaseService.client
@@ -46,7 +46,7 @@ export class CanvaService {
 
         if (error || !order) {
             this.logger.error(`Canva order insert: ${error?.message}`);
-            throw new BadRequestException('Buyurtma yaratishda xatolik');
+            throw new BadRequestException('Failed to create order');
         }
 
         this.emailService.sendCanvaOrderConfirmation(userEmail, order._id, fullName || undefined).catch(() => { });
@@ -65,10 +65,10 @@ export class CanvaService {
             .single();
 
         if (fetchError || !order) {
-            throw new NotFoundException('Buyurtma topilmadi');
+            throw new NotFoundException('Order not found');
         }
         if (order.status === 'fulfilled') {
-            throw new BadRequestException('Buyurtma allaqachon bajarilgan');
+            throw new BadRequestException('Order is already fulfilled');
         }
 
         const now = new Date().toISOString();
@@ -85,7 +85,7 @@ export class CanvaService {
 
         if (updateError) {
             this.logger.error(`Canva fulfill update: ${updateError.message}`);
-            throw new BadRequestException('Yangilashda xatolik');
+            throw new BadRequestException('Failed to update');
         }
 
         const { data: user } = await this.databaseService.client
@@ -111,7 +111,7 @@ export class CanvaService {
 
         if (error) {
             this.logger.error(`Canva getMyOrders: ${error.message}`);
-            throw new BadRequestException('Buyurtmalar yuklanmadi');
+            throw new BadRequestException('Failed to load orders');
         }
         return data || [];
     }
@@ -125,7 +125,7 @@ export class CanvaService {
 
         if (error) {
             this.logger.error(`Admin getAllOrders: ${error.message}`);
-            throw new BadRequestException('Barcha buyurtmalar yuklanmadi');
+            throw new BadRequestException('Failed to load all orders');
         }
         return data || [];
     }

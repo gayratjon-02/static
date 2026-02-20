@@ -12,7 +12,7 @@ export class CanvaController {
     @UseGuards(AuthGuard)
     @Post('orders')
     async createOrder(@Body() dto: CreateCanvaOrderDto, @AuthMember() auth: any) {
-        if (auth?.admin_role) throw new UnauthorizedException('Faqat oddiy foydalanuvchi buyurtma yarata oladi');
+        if (auth?.admin_role) throw new UnauthorizedException('Only regular users can create orders');
         const userId = auth._id;
         const email = auth.email || '';
         const fullName = auth.full_name || null;
@@ -22,7 +22,7 @@ export class CanvaController {
     @UseGuards(AuthGuard)
     @Get('orders')
     async getMyOrders(@AuthMember() auth: any) {
-        if (auth?.admin_role) throw new UnauthorizedException('Faqat oddiy foydalanuvchi');
+        if (auth?.admin_role) throw new UnauthorizedException('Only regular users can view their orders');
         return this.canvaService.getMyOrders(auth._id);
     }
 

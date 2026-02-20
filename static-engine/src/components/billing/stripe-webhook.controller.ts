@@ -10,8 +10,8 @@ export class StripeWebhookController {
 
     /**
      * POST /webhooks/stripe
-     * Stripe webhook eventlarini qabul qiladi.
-     * AuthGuard YO'Q — Stripe o'zi yuboradi, signature orqali verify qilinadi.
+     * Receives Stripe webhook events.
+     * No AuthGuard — Stripe sends requests; verified via signature.
      */
     @Post('stripe')
     @HttpCode(200)

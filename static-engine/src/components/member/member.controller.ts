@@ -85,7 +85,7 @@ export class MemberController {
 		return this.memberService.deleteMember(authMember);
 	}
 
-	// getUsage — credit va obuna holati
+	// getUsage — credits and subscription status
 	@UseGuards(AuthGuard)
 	@Get('getUsage')
 	public async getUsage(@AuthMember() authMember: Member) {

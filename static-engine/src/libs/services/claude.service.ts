@@ -22,8 +22,8 @@ export class ClaudeService {
 	}
 
 	/**
-	 * 6 ta turli variation yaratadi — har biri boshqa headline, angle, visual approach bilan.
-	 * Bu asosiy generation flow uchun ishlatiladi.
+	 * Creates 6 different variations — each with a different headline, angle, and visual approach.
+	 * Used for the main generation flow.
 	 */
 	async generate6Variations(
 		brand: Brand,
@@ -73,8 +73,8 @@ export class ClaudeService {
 	}
 
 	/**
-	 * Bitta ad copy yaratadi — fixErrors va regenerateSingle uchun ishlatiladi.
-	 * Eski generateAdCopy backward compatibility uchun saqlanadi.
+	 * Creates a single ad copy — used for fixErrors and regenerateSingle.
+	 * Legacy generateAdCopy kept for backward compatibility.
 	 */
 	async generateAdCopy(
 		brand: Brand,
@@ -169,8 +169,8 @@ Generate an improved version. Keep the same ad copy/messaging but create a much 
 	}
 
 	/**
-	 * 6 Variations uchun system prompt.
-	 * Claude dan 6 ta turli creative angle bilan ad copy so'raydi.
+	 * System prompt for 6 variations.
+	 * Asks Claude for 6 ad copies with different creative angles.
 	 */
 	private async get6VariationsSystemPrompt(): Promise<string> {
 		try {
@@ -234,7 +234,7 @@ The "variations" array MUST contain exactly 6 objects. Each object represents on
 	}
 
 	/**
-	 * Single ad uchun system prompt (fixErrors, regenerateSingle uchun).
+	 * System prompt for single ad (fixErrors, regenerateSingle).
 	 */
 	private async getSystemPrompt(): Promise<string> {
 		try {
@@ -291,7 +291,7 @@ You MUST respond with valid JSON only, no markdown, no code blocks. The JSON mus
 	}
 
 	/**
-	 * 6 ta variation uchun user prompt.
+	 * User prompt for 6 variations.
 	 */
 	private build6VariationsUserPrompt(
 		brand: Brand,
@@ -385,10 +385,10 @@ Generate EXACTLY 6 unique variations as a JSON object with a "variations" array.
 	}
 
 	/**
-	 * Single ad uchun user prompt (fixErrors, regenerateSingle uchun).
+	 * User prompt for single ad (fixErrors, regenerateSingle).
 	 */
 	/**
-	 * Single ad uchun user prompt (fixErrors, regenerateSingle uchun).
+	 * User prompt for single ad (fixErrors, regenerateSingle).
 	 */
 	private buildUserPrompt(
 		brand: Brand,
@@ -521,7 +521,7 @@ Ensure the layout is robust and does not rely on hardcoded pixel coordinates.`;
 	}
 
 	/**
-	 * User-provided notes ni prompt injection uchun sanitizatsiya qiladi.
+	 * Sanitizes user-provided notes for prompt injection.
 	 * Max 500 chars, common injection patterns olib tashlanadi.
 	 */
 	private sanitizeImportantNotes(notes: string): string {
@@ -550,8 +550,8 @@ Ensure the layout is robust and does not rely on hardcoded pixel coordinates.`;
 	}
 
 	/**
-	 * Concept image URL bo'lsa — vision content array qaytaradi.
-	 * Aks holda — oddiy string qaytaradi.
+	 * If concept image URL present — returns vision content array.
+	 * Otherwise — returns plain string.
 	 */
 	private buildUserMessageContent(
 		textPrompt: string,
@@ -573,12 +573,12 @@ Ensure the layout is robust and does not rely on hardcoded pixel coordinates.`;
 	}
 
 	/**
-	 * 6 ta variation response ni parse qiladi.
+	 * Parses the 6-variation response.
 	 */
 	private parse6VariationsResponse(text: string): Claude6VariationsResponse {
 		let jsonStr = text.trim();
 
-		// Code block ichidagi JSON ni ajratib olish
+		// Extract JSON from code block
 		const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
 		if (codeBlockMatch) {
 			jsonStr = codeBlockMatch[1].trim();
@@ -586,7 +586,7 @@ Ensure the layout is robust and does not rely on hardcoded pixel coordinates.`;
 
 		const parsed = JSON.parse(jsonStr);
 
-		// "variations" array borligini tekshirish
+		// Check that "variations" array exists
 		if (!parsed.variations || !Array.isArray(parsed.variations)) {
 			throw new Error('Claude response missing "variations" array');
 		}
@@ -595,7 +595,7 @@ Ensure the layout is robust and does not rely on hardcoded pixel coordinates.`;
 			throw new Error('Claude response has empty variations array');
 		}
 
-		// Har bir variation ni validate qilish
+		// Validate each variation
 		const required = ['headline', 'subheadline', 'body_text', 'callout_texts', 'cta_text', 'gemini_image_prompt'];
 		const validVariations: ClaudeResponseJson[] = [];
 
@@ -622,7 +622,7 @@ Ensure the layout is robust and does not rely on hardcoded pixel coordinates.`;
 			throw new Error('No valid variations found in Claude response');
 		}
 
-		// Agar 6 tadan kam bo'lsa — log qilish (lekin xato tashlamaslik)
+		// If fewer than 6 — log (but do not throw)
 		if (validVariations.length < 6) {
 			this.logger.warn(`Claude returned ${validVariations.length} variations instead of 6. Proceeding with available variations.`);
 		}
@@ -632,7 +632,7 @@ Ensure the layout is robust and does not rely on hardcoded pixel coordinates.`;
 	}
 
 	/**
-	 * Single ad response parse (fixErrors, regenerateSingle uchun).
+	 * Parse single ad response (fixErrors, regenerateSingle).
 	 */
 	private parseResponse(text: string): ClaudeResponseJson {
 		let jsonStr = text.trim();

@@ -36,12 +36,12 @@ export class BillingService {
             .single();
 
         if (dbError) {
-            this.logger.error(`DB xatolik (user lookup): ${dbError.message}`);
-            throw new InternalServerErrorException('Foydalanuvchi topilmadi');
+            this.logger.error(`DB error (user lookup): ${dbError.message}`);
+            throw new InternalServerErrorException('User not found');
         }
 
         if (user?.stripe_customer_id && user.stripe_customer_id !== '') {
-            this.logger.log(`Mavjud Stripe customer: ${user.stripe_customer_id} (user: ${userId})`);
+            this.logger.log(`Existing Stripe customer: ${user.stripe_customer_id} (user: ${userId})`);
             return { stripe_customer_id: user.stripe_customer_id, is_new: false };
         }
 
@@ -57,8 +57,8 @@ export class BillingService {
             });
         } catch (err) {
             const e = err as Error;
-            this.logger.error(`Stripe customer yaratish xatolik: ${e.message}`, e.stack);
-            throw new InternalServerErrorException('To\'lov tizimida xatolik yuz berdi');
+            this.logger.error(`Stripe customer creation error: ${e.message}`, e.stack);
+            throw new InternalServerErrorException('Payment system error');
         }
 
         const { error: updateError } = await this.databaseService.client
@@ -68,12 +68,12 @@ export class BillingService {
 
         if (updateError) {
             this.logger.error(
-                `CRITICAL: Stripe customer (${customer.id}) yaratildi lekin DB'ga saqlanmadi! ` +
+                `CRITICAL: Stripe customer (${customer.id}) created but not saved to DB! ` +
                 `userId: ${userId}, error: ${updateError.message}`,
             );
         }
 
-        this.logger.log(`Yangi Stripe customer yaratildi: ${customer.id} (user: ${userId})`);
+        this.logger.log(`New Stripe customer created: ${customer.id} (user: ${userId})`);
         return { stripe_customer_id: customer.id, is_new: true };
     }
 
@@ -95,7 +95,7 @@ export class BillingService {
         console.log('  tier:', tier);
         console.log('  billingInterval:', billingInterval);
 
-        // 1 ─ Aktiv obuna tekshirish
+        // 1 — Check for active subscription
         const { data: existingSub } = await this.databaseService.client
             .from('subscriptions')
             .select('_id')
@@ -106,15 +106,15 @@ export class BillingService {
         if (existingSub) {
             console.log('  ⚠️ Already has active subscription:', existingSub._id);
             throw new BadRequestException(
-                'Sizda aktiv obuna bor. Plan o\'zgartirish uchun /billing/portal dan foydalaning.',
+                'You already have an active subscription. Use the billing portal to change your plan.',
             );
         }
 
-        // 2 ─ Stripe Customer olish yoki yaratish
+        // 2 — Get or create Stripe Customer
         const { stripe_customer_id } = await this.getOrCreateCustomer(userId, email, fullName);
         console.log('  stripe_customer_id:', stripe_customer_id);
 
-        // 3 ─ subscription_tiers dan price_id olish
+        // 3 — Get price_id from subscription_tiers
         const priceField = billingInterval === 'annual'
             ? 'stripe_annual_price_id'
             : 'stripe_monthly_price_id';
@@ -130,7 +130,7 @@ export class BillingService {
         console.log('  tierError:', tierError?.message || 'none');
 
         if (tierError || !tierData || !tierData[priceField]) {
-            throw new BadRequestException('Noto\'g\'ri tier yoki narx sozlanmagan');
+            throw new BadRequestException('Invalid tier or price not configured');
         }
 
         const frontendUrl = this.configService.get('FRONTEND_URL');
@@ -138,7 +138,7 @@ export class BillingService {
         console.log('  success_url:', `${frontendUrl}/dashboard?checkout=success`);
         console.log('  cancel_url:', `${frontendUrl}/pricing?checkout=cancelled`);
 
-        // 4 ─ Stripe Checkout Session yaratish
+        // 4 — Create Stripe Checkout Session
         let session: Stripe.Checkout.Session;
         try {
             session = await this.stripe.checkout.sessions.create({
@@ -166,13 +166,13 @@ export class BillingService {
         } catch (err) {
             const e = err as Error;
             console.error('  ❌ Checkout session error:', e.message);
-            this.logger.error(`Checkout session yaratish xatolik: ${e.message}`, e.stack);
-            throw new InternalServerErrorException('To\'lov sessiyasi yaratishda xatolik yuz berdi');
+            this.logger.error(`Checkout session creation error: ${e.message}`, e.stack);
+            throw new InternalServerErrorException('Failed to create checkout session');
         }
 
         console.log('  ✅ Session created:', session.id);
         console.log('  checkout_url:', session.url);
-        this.logger.log(`Checkout session yaratildi: ${session.id} (user: ${userId}, tier: ${tier})`);
+        this.logger.log(`Checkout session created: ${session.id} (user: ${userId}, tier: ${tier})`);
         return { checkout_url: session.url };
     }
 
@@ -188,7 +188,7 @@ export class BillingService {
             .single();
 
         if (!user?.stripe_customer_id || user.stripe_customer_id === '') {
-            throw new BadRequestException('Aktiv obuna topilmadi');
+            throw new BadRequestException('No active subscription found');
         }
 
         let session: Stripe.BillingPortal.Session;
@@ -199,8 +199,8 @@ export class BillingService {
             });
         } catch (err) {
             const e = err as Error;
-            this.logger.error(`Portal session xatolik: ${e.message}`, e.stack);
-            throw new InternalServerErrorException('Portal sessiyasi yaratishda xatolik');
+            this.logger.error(`Portal session error: ${e.message}`, e.stack);
+            throw new InternalServerErrorException('Failed to create portal session');
         }
 
         return { portal_url: session.url };
@@ -219,7 +219,7 @@ export class BillingService {
         const addonPriceId = this.configService.get<string>('STRIPE_ADDON_PRICE_ID');
 
         if (!addonPriceId) {
-            throw new InternalServerErrorException('Addon narxi sozlanmagan');
+            throw new InternalServerErrorException('Addon price not configured');
         }
 
         let session: Stripe.Checkout.Session;
@@ -238,8 +238,8 @@ export class BillingService {
             });
         } catch (err) {
             const e = err as Error;
-            this.logger.error(`Addon checkout xatolik: ${e.message}`, e.stack);
-            throw new InternalServerErrorException('Addon to\'lovi yaratishda xatolik');
+            this.logger.error(`Addon checkout error: ${e.message}`, e.stack);
+            throw new InternalServerErrorException('Failed to create addon checkout');
         }
 
         return { checkout_url: session.url };
@@ -283,8 +283,8 @@ export class BillingService {
             });
         } catch (err) {
             const e = err as Error;
-            this.logger.error(`Canva checkout xatolik: ${e.message}`, e.stack);
-            throw new InternalServerErrorException('Canva to\'lovi yaratishda xatolik');
+            this.logger.error(`Canva checkout error: ${e.message}`, e.stack);
+            throw new InternalServerErrorException('Failed to create Canva checkout');
         }
 
         return { checkout_url: session.url };
@@ -302,8 +302,8 @@ export class BillingService {
             .order('display_order', { ascending: true });
 
         if (error) {
-            this.logger.error(`Plans olishda xatolik: ${error.message}`);
-            throw new InternalServerErrorException('Planlar yuklanmadi');
+            this.logger.error(`Plans fetch error: ${error.message}`);
+            throw new InternalServerErrorException('Failed to load plans');
         }
 
         return data.map(t => ({
@@ -584,7 +584,7 @@ export class BillingService {
 
         if (!userId || !tier) {
             console.error('  ❌ METADATA MISSING!');
-            this.logger.error('Checkout: metadata topilmadi');
+            this.logger.error('Checkout: metadata missing');
             return;
         }
 
@@ -635,7 +635,7 @@ export class BillingService {
 
         if (!tierData) {
             console.error('  ❌ TIER NOT FOUND in subscription_tiers:', tier);
-            this.logger.error(`Tier topilmadi: ${tier}`);
+            this.logger.error(`Tier not found: ${tier}`);
             return;
         }
 
@@ -708,7 +708,7 @@ export class BillingService {
             });
 
         console.log('  ✅ CHECKOUT COMPLETED FULLY: user=' + userId + ', tier=' + tier);
-        this.logger.log(`Obuna aktivlashtirildi: user=${userId}, tier=${tier}, credits=${tierData.credits_per_month}`);
+        this.logger.log(`Subscription activated: user=${userId}, tier=${tier}, credits=${tierData.credits_per_month}`);
     }
 
     // ── EVENT 2: invoice.payment_succeeded ───────
@@ -723,7 +723,7 @@ export class BillingService {
         const subscriptionId = typeof rawSub === 'string' ? rawSub : rawSub?.id;
 
         if (!subscriptionId) {
-            this.logger.error('Invoice: subscriptionId topilmadi');
+            this.logger.error('Invoice: subscriptionId not found');
             return;
         }
 
@@ -734,7 +734,7 @@ export class BillingService {
             .single();
 
         if (!sub) {
-            this.logger.error(`Subscription topilmadi: ${subscriptionId}`);
+            this.logger.error(`Subscription not found: ${subscriptionId}`);
             return;
         }
 
@@ -836,7 +836,7 @@ export class BillingService {
             this.emailService.sendPaymentFailed(user.email, user.full_name || undefined).catch(() => { });
         }
 
-        this.logger.warn(`To'lov muvaffaqiyatsiz: user=${sub.user_id}`);
+        this.logger.warn(`Payment failed: user=${sub.user_id}`);
     }
 
     // ── EVENT 4: customer.subscription.updated ───
@@ -945,7 +945,7 @@ export class BillingService {
             .update({ status: 'canceled', canceled_at: now, updated_at: now })
             .eq('stripe_subscription_id', subscription.id);
 
-        this.logger.log(`Obuna bekor: user=${sub.user_id} → free tier`);
+        this.logger.log(`Subscription cancelled: user=${sub.user_id} → free tier`);
     }
 
     // ── EVENT 6: payment_intent.succeeded (addon) ─

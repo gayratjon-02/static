@@ -66,11 +66,11 @@ export class GenerationProcessor extends WorkerHost {
 			// 2. Status → processing
 			await this.updateAdStatus(generated_ad_id, GenerationStatus.PROCESSING);
 
-			// 3. DB'dan brand, product, concept olish
+			// 3. Fetch brand, product, concept from DB
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'fetching_data',
-				message: 'Ma\'lumotlar yuklanmoqda...',
+				message: 'Loading data...',
 				progress_percent: 5,
 			});
 
@@ -80,7 +80,7 @@ export class GenerationProcessor extends WorkerHost {
 				this.fetchConcept(concept_id),
 			]);
 
-			// 4. Claude API — ad copy generation (agar job data'da bo'lmasa)
+			// 4. Claude API — ad copy generation (if not already in job data)
 			let claudeResponse: ClaudeResponseJson;
 
 			if (job.data.claude_variation) {
@@ -305,11 +305,11 @@ export class GenerationProcessor extends WorkerHost {
 			// 1. Status → processing
 			await this.updateAdStatus(new_ad_id, GenerationStatus.PROCESSING);
 
-			// 2. Original ad'dan ma'lumotlarni olish
+			// 2. Get data from original ad
 			this.generationGateway.emitProgress(user_id, {
 				job_id: new_ad_id,
 				step: 'fetching_data',
-				message: 'Original ad ma\'lumotlari yuklanmoqda...',
+				message: 'Loading original ad data...',
 				progress_percent: 5,
 			});
 
