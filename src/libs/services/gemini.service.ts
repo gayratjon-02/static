@@ -255,57 +255,19 @@ export class GeminiService {
 		resolution?: string,
 		userApiKey?: string,
 	): Promise<GeminiImageResult> {
-		const maxRetries = 4;
-		const retryDelays = [5000, 15000, 30000, 45000]; // 5s, 15s, 30s, 45s
+		try {
+			const result = await this.generateImages(prompt, aspectRatio, resolution, userApiKey);
 
-		for (let attempt = 0; attempt < maxRetries; attempt++) {
-			try {
-				if (attempt > 0) {
-					const delay = retryDelays[attempt - 1] || 30000;
-					this.logger.log(`🔄 Retry #${attempt}/${maxRetries - 1} — waiting ${delay / 1000}s before retry...`);
-					await new Promise((resolve) => setTimeout(resolve, delay));
-				}
-
-				const result = await this.generateImages(prompt, aspectRatio, resolution, userApiKey);
-
-				if (result.images.length > 0) {
-					if (attempt > 0) {
-						this.logger.log(`✅ Retry #${attempt} SUCCESS`);
-					}
-					return result.images[0];
-				}
-
-				throw new GeminiGenerationError('No images generated');
-			} catch (error: any) {
-				const isLastAttempt = attempt === maxRetries - 1;
-				const errMsg = error?.message || String(error);
-
-				// Check if this is a retryable error
-				const is503 = errMsg.includes('503') || errMsg.includes('UNAVAILABLE') || errMsg.includes('high demand');
-				const isTimeout = errMsg.includes('timed out') || errMsg.includes('timeout');
-				const is429 = errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('rate');
-				const isRetryable = is503 || isTimeout || is429;
-
-				// Non-retryable: safety violations, policy blocks
-				if (errMsg.includes('violates') || errMsg.includes('safety') || errMsg.includes('refused')) {
-					this.logger.error(`🚫 Non-retryable error (safety/policy): ${errMsg.substring(0, 200)}`);
-					throw error;
-				}
-
-				if (isRetryable && !isLastAttempt) {
-					const reason = is503 ? '503 UNAVAILABLE' : isTimeout ? 'TIMEOUT' : '429 RATE LIMIT';
-					this.logger.warn(`⚠️ Attempt ${attempt + 1}/${maxRetries} failed: ${reason} — will retry`);
-					continue;
-				}
-
-				if (isLastAttempt) {
-					this.logger.error(`❌ All ${maxRetries} attempts failed. Last error: ${errMsg.substring(0, 200)}`);
-				}
-				throw error;
+			if (result.images.length > 0) {
+				return result.images[0];
 			}
-		}
 
-		throw new InternalServerErrorException(AIMessage.GEMINI_API_ERROR);
+			throw new GeminiGenerationError('No images generated');
+		} catch (error: any) {
+			const errMsg = error?.message || String(error);
+			this.logger.error(`❌ Image generation failed. Error: ${errMsg.substring(0, 200)}`);
+			throw error;
+		}
 	}
 
 	async generateImageWithReference(
