@@ -271,3 +271,33 @@ export async function downloadAdImageByRatio(adId: string, ratio: string, filena
     document.body.removeChild(a);
     URL.revokeObjectURL(blobUrl);
 }
+
+/**
+ * POST /generation/fixErrors/:adId
+ * Starts a fix job to fix an existing ad based on a description.
+ */
+export async function fixErrorRequest(adId: string, errorDescription: string): Promise<{ _id: string }> {
+    const res = await fetch(`${GENERATION_API}/fixErrors/${adId}`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ prompt_addon: errorDescription, error_description: errorDescription }),
+    });
+
+    if (!res.ok) {
+        const error = await res.json().catch(() => ({ message: "Fix request failed" }));
+        throw new Error(error.message || `Fix request failed (${res.status})`);
+    }
+
+    return res.json();
+}
+
+/**
+ * GET /generation/ad/:adId
+ * Poll a single ad status. We use a filter on the getLibraryAdsRequest to get it.
+ */
+export async function getSingleAdRequest(adId: string): Promise<any> {
+    const res = await getLibraryAdsRequest({ search: adId });
+    // Wait, getLibraryAdsRequest uses standard search. If we need exactly the ID, we can just extract it.
+    const item = res.list.find((a: any) => a._id === adId);
+    return item || null;
+}

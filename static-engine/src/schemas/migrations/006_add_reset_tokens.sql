@@ -1,0 +1,3 @@
+-- Migration: Add Forgot Password Tokens
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(255);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires TIMESTAMP;

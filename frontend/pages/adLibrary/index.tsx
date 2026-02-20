@@ -9,6 +9,8 @@ import {
     toggleFavoriteRequest,
     renameAdRequest,
     deleteAdsRequest,
+    fixErrorRequest,
+    getSingleAdRequest,
 } from "../../server/user/generation";
 import type { AdLibraryItem, LibraryCounts } from "../../libs/types/generation.type";
 
@@ -55,6 +57,15 @@ function LibraryPage() {
     const [loading, setLoading] = useState(true);
     const [isExporting, setIsExporting] = useState(false);
     const [canvaLoading, setCanvaLoading] = useState(false);
+    const [zipDownloading, setZipDownloading] = useState(false);
+
+    // Fix Errors States
+    const [fixModalOpen, setFixModalOpen] = useState(false);
+    const [fixDescription, setFixDescription] = useState("");
+    const [isFixing, setIsFixing] = useState(false);
+    const [fixedAdId, setFixedAdId] = useState<string | null>(null);
+    const [fixedAdOutput, setFixedAdOutput] = useState<any | null>(null);
+    const [isCompareOpen, setIsCompareOpen] = useState(false);
 
     const handleBuyCanva = async () => {
         if (!detailAd || canvaLoading) return;
@@ -170,7 +181,105 @@ function LibraryPage() {
         setBulkLoading(null);
     };
 
+    const fetchRatioBlob = async (adId: string, ratio: string): Promise<Blob | null> => {
+        const token = localStorage.getItem("se_access_token");
+        try {
+            const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3007";
+            const res = await fetch(`${API_BASE_URL}/generation/download/${adId}/${ratio}`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            if (!res.ok) return null;
+            return await res.blob();
+        } catch {
+            return null;
+        }
+    };
+
+    const downloadAllAsZip = async () => {
+        if (!detailAd || zipDownloading) return;
+        setZipDownloading(true);
+        try {
+            const JSZip = (await import("jszip")).default;
+            const zip = new JSZip();
+            const adName = (detailAd.name || "ad").replace(/[^a-zA-Z0-9_-]/g, "_");
+            const ratios = ["1:1", "9:16", "16:9"];
+
+            for (const ratio of ratios) {
+                const blob = await fetchRatioBlob(detailAd._id, ratio);
+                if (blob) zip.file(`${adName}_${ratio.replace(":", "x")}.png`, blob);
+            }
+            const zipBlob = await zip.generateAsync({ type: "blob" });
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(zipBlob);
+            a.download = `${adName}_all_ratios.zip`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        } catch (e) {
+            console.error("ZIP download failed", e);
+            alert("Failed to create ZIP");
+        } finally {
+            setZipDownloading(false);
+        }
+    };
+
     const detailAd = detailId ? ads.find((a) => a._id === detailId) : null;
+
+    // 🔥 Fix Errors logic & polling
+    useEffect(() => {
+        if (!fixedAdId) return;
+        const interval = setInterval(async () => {
+            try {
+                const data = await getSingleAdRequest(fixedAdId);
+                if (data && data.generation_status === "completed") {
+                    setFixedAdOutput(data);
+                    setIsFixing(false);
+                    setFixModalOpen(false);
+                    setIsCompareOpen(true);
+                    setFixedAdId(null);
+                } else if (data && data.generation_status === "failed") {
+                    alert("Fix job failed.");
+                    setIsFixing(false);
+                    setFixModalOpen(false);
+                    setFixedAdId(null);
+                }
+            } catch (e) { }
+        }, 5000);
+        return () => clearInterval(interval);
+    }, [fixedAdId]);
+
+    const handleStartFix = async () => {
+        if (!detailAd || !fixDescription.trim() || isFixing) return;
+        setIsFixing(true);
+        try {
+            const data = await fixErrorRequest(detailAd._id, fixDescription.trim());
+            setFixedAdId(data._id);
+            setFixDescription("");
+        } catch (e: any) {
+            alert(e.message || "Failed to start fix");
+            setIsFixing(false);
+        }
+    };
+
+    const handleAcceptFix = async () => {
+        if (!detailAd) return;
+        try {
+            await deleteAdsRequest([detailAd._id]);
+            setAds((prev) => prev.filter((a) => a._id !== detailAd?._id));
+            if (fixedAdOutput) setAds((prev) => [fixedAdOutput, ...prev]);
+        } catch { }
+        setIsCompareOpen(false);
+        setFixedAdOutput(null);
+        setDetailId(null);
+    };
+
+    const handleRejectFix = async () => {
+        try {
+            if (fixedAdOutput) await deleteAdsRequest([fixedAdOutput._id]);
+        } catch { }
+        setIsCompareOpen(false);
+        setFixedAdOutput(null);
+    };
 
     return (
         <div className="library-page">
@@ -485,107 +594,167 @@ function LibraryPage() {
 
             {/* ===== DETAIL PANEL ===== */}
             {detailAd && (
-                <div className="lib-detail-overlay" onClick={() => setDetailId(null)}>
-                    <div className="lib-detail-panel" onClick={(e) => e.stopPropagation()}>
-                        <div className="lib-detail-panel__header">
-                            <span className="lib-detail-panel__title">{detailAd.name}</span>
-                            <button className="lib-detail-panel__close" onClick={() => setDetailId(null)}>×</button>
+                <div className="modal-backdrop" onClick={() => setDetailId(null)} style={{ zIndex: 999 }}>
+                    <div
+                        className="modal-content"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ maxWidth: 1200, width: "95%", height: "85vh", display: "flex", flexDirection: "column", padding: 0 }}
+                    >
+                        {/* Header */}
+                        <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,0.1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h2 style={{ margin: 0, fontSize: 20, color: "var(--text)" }}>{detailAd.name}</h2>
+                            <button onClick={() => setDetailId(null)} style={{ background: "transparent", border: "none", color: "var(--muted)", fontSize: 24, cursor: "pointer" }}>×</button>
                         </div>
 
-                        <div
-                            className="lib-detail-panel__preview"
-                            style={{
-                                background: detailAd.image
-                                    ? `url(${detailAd.image}) center/contain no-repeat`
-                                    : `linear-gradient(135deg, #eee, #ddd)`,
-                            }}
-                        >{!detailAd.image && <span className="lib-detail-panel__preview-label">AD</span>}</div>
-
-                        <div className="lib-detail-panel__body">
-                            <div className="lib-detail-panel__meta">
-                                {[
-                                    { label: "Brand", value: detailAd.brand_name },
-                                    { label: "Product", value: detailAd.product_name },
-                                    { label: "Concept", value: detailAd.concept_name },
-                                    { label: "Date", value: timeAgo(detailAd.created_at) },
-                                ].map((m) => (
-                                    <div key={m.label}>
-                                        <div className="detail-meta__label">{m.label}</div>
-                                        <div className="detail-meta__value">{m.value}</div>
-                                    </div>
-                                ))}
+                        {/* Body */}
+                        <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
+                            {/* Left: Images */}
+                            <div style={{ flex: 1, padding: 24, overflowY: "auto", borderRight: "1px solid rgba(255,255,255,0.1)" }}>
+                                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24 }}>
+                                    {[
+                                        { ratio: "1:1", url: detailAd.image_url_1x1 || detailAd.image },
+                                        { ratio: "9:16", url: detailAd.image_url_9x16 },
+                                        { ratio: "16:9", url: detailAd.image_url_16x9 }
+                                    ].filter(x => x.url).map((img, i) => (
+                                        <div key={i} style={{ background: "rgba(0,0,0,0.2)", borderRadius: 12, overflow: "hidden", border: "1px solid rgba(255,255,255,0.05)" }}>
+                                            <div style={{ padding: "10px 14px", background: "rgba(255,255,255,0.03)", fontSize: 13, fontWeight: 600, color: "var(--text)", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                                                {img.ratio}
+                                            </div>
+                                            <img src={img.url} alt={img.ratio} style={{ width: "100%", height: "auto", display: "block", objectFit: "contain", maxHeight: "60vh" }} />
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
 
-                            <div className="detail-actions">
-                                {/* Favorite toggle in detail */}
-                                <button
-                                    onClick={(e) => handleToggleFavorite(e, detailAd._id)}
-                                    style={{
-                                        width: "100%", padding: "10px 0", borderRadius: 10,
-                                        border: `1px solid ${detailAd.is_favorite ? "rgba(251,191,36,0.5)" : "var(--border)"}`,
-                                        background: detailAd.is_favorite ? "rgba(251,191,36,0.1)" : "transparent",
-                                        color: detailAd.is_favorite ? "#FBBF24" : "var(--muted)",
-                                        fontWeight: 600, fontSize: 13, cursor: "pointer", marginBottom: 10,
-                                    }}
-                                >{detailAd.is_favorite ? "⭐ Remove from Favorites" : "☆ Add to Favorites"}</button>
-
-                                {/* 3-ratio download buttons */}
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 10 }}>
-                                    {(["1:1", "9:16", "16:9"] as const).map((ratio) => (
-                                        <button
-                                            key={ratio}
-                                            className="detail-actions__btn detail-actions__btn--primary"
-                                            onClick={() => {
-                                                downloadAdImageByRatio(detailAd._id, ratio, `${detailAd.name}_${ratio.replace(":", "x")}.png`)
-                                                    .catch(() => { if (detailAd.image) window.open(detailAd.image, "_blank"); });
-                                            }}
-                                            style={{ padding: "9px 0", fontSize: 12 }}
-                                        >⤓ {ratio}</button>
+                            {/* Right: Meta & Actions */}
+                            <div style={{ width: 350, padding: 24, overflowY: "auto", background: "rgba(255,255,255,0.01)" }}>
+                                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "var(--text)" }}>Metadata</h3>
+                                <div style={{ marginBottom: 30, padding: 20, background: "rgba(0,0,0,0.2)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.03)" }}>
+                                    {[
+                                        { label: "Brand", value: detailAd.brand_name },
+                                        { label: "Product", value: detailAd.product_name },
+                                        { label: "Concept", value: detailAd.concept_name },
+                                        { label: "Created", value: timeAgo(detailAd.created_at) }
+                                    ].map((m) => (
+                                        <div key={m.label} style={{ marginBottom: 14, fontSize: 13 }}>
+                                            <div style={{ color: "var(--muted)", marginBottom: 4 }}>{m.label}</div>
+                                            <div style={{ color: "var(--text)", fontWeight: 500 }}>{m.value}</div>
+                                        </div>
                                     ))}
                                 </div>
 
-                                <div className="detail-actions__row">
-                                    <button className="detail-actions__btn detail-actions__btn--secondary">↻ Regenerate</button>
-                                    <button
-                                        className="detail-actions__btn detail-actions__btn--secondary"
-                                        style={{ borderColor: "rgba(239,68,68,0.3)", color: "#EF4444" }}
-                                        onClick={async () => {
-                                            if (!confirm("Delete this ad?")) return;
-                                            try {
-                                                await deleteAdsRequest([detailAd._id]);
-                                                setAds((prev) => prev.filter((a) => a._id !== detailAd._id));
-                                                setDetailId(null);
-                                            } catch { alert("Delete failed"); }
-                                        }}
-                                    >🗑 Delete</button>
-                                </div>
-                                <div className="detail-actions__row">
-                                    {detailAd.canva_status === 'fulfilled' && detailAd.canva_link ? (
-                                        <button
-                                            className="detail-actions__btn detail-actions__btn--secondary"
-                                            style={{ borderColor: "rgba(16,185,129,0.3)", color: "#10B981" }}
-                                            onClick={() => window.open(detailAd.canva_link!, "_blank")}
-                                        >Open Canva Template</button>
-                                    ) : detailAd.canva_status === 'pending' ? (
-                                        <button
-                                            className="detail-actions__btn detail-actions__btn--secondary"
-                                            style={{ borderColor: "rgba(245,158,11,0.27)", color: "var(--yellow)", opacity: 0.7, cursor: "not-allowed" }}
-                                            disabled
-                                        >Canva Template Pending...</button>
-                                    ) : (
-                                        <button
-                                            className="detail-actions__btn detail-actions__btn--secondary"
-                                            style={{ borderColor: "rgba(245,158,11,0.27)", color: "var(--yellow)" }}
-                                            onClick={handleBuyCanva}
-                                            disabled={canvaLoading}
-                                        >{canvaLoading ? "Redirecting..." : "Buy Canva Template"}</button>
-                                    )}
+                                <h3 style={{ margin: "0 0 16px", fontSize: 16, color: "var(--text)" }}>Actions</h3>
+                                {/* Same actions block as before */}
+                                <div className="detail-actions">
+                                    <button onClick={(e) => handleToggleFavorite(e, detailAd._id)} style={{ width: "100%", padding: "12px 0", borderRadius: 10, border: `1px solid ${detailAd.is_favorite ? "rgba(251,191,36,0.5)" : "rgba(255,255,255,0.1)"}`, background: detailAd.is_favorite ? "rgba(251,191,36,0.1)" : "transparent", color: detailAd.is_favorite ? "#FBBF24" : "var(--muted)", fontWeight: 600, fontSize: 13, cursor: "pointer", marginBottom: 16 }}>{detailAd.is_favorite ? "⭐ Remove from Favorites" : "☆ Add to Favorites"}</button>
+
+                                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+                                        {(["1:1", "9:16", "16:9"] as const).map((ratio) => (
+                                            <button key={ratio} className="detail-actions__btn detail-actions__btn--primary" onClick={() => { downloadAdImageByRatio(detailAd._id, ratio, `${detailAd.name}_${ratio.replace(":", "x")}.png`).catch(() => { if (detailAd.image) window.open(detailAd.image, "_blank"); }); }} style={{ padding: "10px 0", fontSize: 12 }}>⤓ {ratio}</button>
+                                        ))}
+                                    </div>
+
+                                    <button className="detail-actions__btn detail-actions__btn--primary" onClick={downloadAllAsZip} disabled={zipDownloading} style={{ width: "100%", padding: "12px 0", marginBottom: 20, background: "linear-gradient(135deg, rgba(34,211,238,0.1), rgba(59,130,246,0.1))", border: "1px solid rgba(34,211,238,0.3)", color: "#38bdf8", fontWeight: 600, fontSize: 13, opacity: zipDownloading ? 0.7 : 1 }}>{zipDownloading ? "Packing ZIP..." : "⤓ Download All Ratios (ZIP)"}</button>
+
+                                    <div className="detail-actions__row">
+                                        <button className="detail-actions__btn detail-actions__btn--secondary" style={{ borderColor: "rgba(16,185,129,0.3)", color: "#10B981" }} onClick={() => setFixModalOpen(true)}>🛠 Fix Errors</button>
+                                        <button className="detail-actions__btn detail-actions__btn--secondary">↻ Regenerate</button>
+                                        <button className="detail-actions__btn detail-actions__btn--secondary" style={{ borderColor: "rgba(239,68,68,0.3)", color: "#EF4444" }} onClick={async () => { if (!confirm("Delete this ad?")) return; try { await deleteAdsRequest([detailAd._id]); setAds((prev) => prev.filter((a) => a._id !== detailAd._id)); setDetailId(null); } catch { alert("Delete failed"); } }}>🗑 Delete</button>
+                                    </div>
+
+                                    <div className="detail-actions__row">
+                                        {detailAd.canva_status === 'fulfilled' && detailAd.canva_link ? (
+                                            <button className="detail-actions__btn detail-actions__btn--secondary" style={{ borderColor: "rgba(16,185,129,0.3)", color: "#10B981" }} onClick={() => window.open(detailAd.canva_link!, "_blank")}>Open Canva Template</button>
+                                        ) : detailAd.canva_status === 'pending' ? (
+                                            <button className="detail-actions__btn detail-actions__btn--secondary" style={{ borderColor: "rgba(245,158,11,0.27)", color: "var(--yellow)", opacity: 0.7, cursor: "not-allowed" }} disabled>Canva Template Pending...</button>
+                                        ) : (
+                                            <button className="detail-actions__btn detail-actions__btn--secondary" style={{ borderColor: "rgba(245,158,11,0.27)", color: "var(--yellow)" }} onClick={handleBuyCanva} disabled={canvaLoading}>{canvaLoading ? "Redirecting..." : "Buy Canva Template"}</button>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
             )}
+            {/* MODALS BELOW */}
+
+            {/* Fix Description Modal */}
+            {fixModalOpen && (
+                <div className="modal-backdrop" onClick={() => !isFixing && setFixModalOpen(false)}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 450, padding: 30 }}>
+                        <h2 style={{ margin: "0 0 10px", fontSize: 20, color: "var(--text)" }}>Describe the fix</h2>
+                        <p style={{ margin: "0 0 20px", fontSize: 14, color: "var(--muted)" }}>Tell us what needs to be changed in this ad (e.g., "remove the dog", "make the logo larger").</p>
+
+                        <textarea
+                            disabled={isFixing}
+                            value={fixDescription}
+                            onChange={(e) => setFixDescription(e.target.value)}
+                            placeholder="Describe your fix here..."
+                            style={{
+                                width: "100%", minHeight: 120, background: "rgba(255,255,255,0.05)",
+                                border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, padding: 12,
+                                color: "var(--text)", fontSize: 14, outline: "none", resize: "none", marginBottom: 20
+                            }}
+                        />
+
+                        <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+                            <button
+                                onClick={() => setFixModalOpen(false)}
+                                disabled={isFixing}
+                                style={{ padding: "10px 16px", background: "transparent", color: "var(--muted)", border: "none", cursor: "pointer", fontWeight: 500 }}
+                            >Cancel</button>
+                            <button
+                                onClick={handleStartFix}
+                                disabled={isFixing || !fixDescription.trim()}
+                                style={{
+                                    padding: "10px 20px", background: "var(--primary)", color: "#fff", border: "none",
+                                    borderRadius: 8, cursor: "pointer", fontWeight: 600, opacity: (isFixing || !fixDescription.trim()) ? 0.6 : 1
+                                }}
+                            >{isFixing ? "Fixing image..." : "Start Fix"}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Comparison Modal */}
+            {isCompareOpen && detailAd && fixedAdOutput && (
+                <div className="modal-backdrop" style={{ zIndex: 9999 }}>
+                    <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 1000, padding: 30, background: "var(--bg-layer1)" }}>
+                        <h2 style={{ margin: "0 0 20px", fontSize: 22, color: "var(--text)", textAlign: "center" }}>Review Fixes</h2>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 30 }}>
+                            {/* Original */}
+                            <div style={{ textAlign: "center" }}>
+                                <h3 style={{ margin: "0 0 10px", color: "var(--muted)", fontSize: 16 }}>Original</h3>
+                                <div style={{ border: "2px solid rgba(255,255,255,0.1)", borderRadius: 12, overflow: "hidden", aspectRatio: "1/1" }}>
+                                    <img src={detailAd.image_url_1x1 || detailAd.image} alt="Original" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                </div>
+                            </div>
+
+                            {/* Fixed */}
+                            <div style={{ textAlign: "center" }}>
+                                <h3 style={{ margin: "0 0 10px", color: "#10B981", fontSize: 16 }}>Fixed Version</h3>
+                                <div style={{ border: "2px solid #10B981", borderRadius: 12, overflow: "hidden", aspectRatio: "1/1" }}>
+                                    <img src={fixedAdOutput.image_url_1x1 || fixedAdOutput.image} alt="Fixed" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style={{ display: "flex", gap: 16, justifyContent: "center" }}>
+                            <button
+                                onClick={handleRejectFix}
+                                style={{ padding: "12px 24px", background: "rgba(239,68,68,0.1)", color: "#EF4444", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 15 }}
+                            >✕ Reject Fix</button>
+                            <button
+                                onClick={handleAcceptFix}
+                                style={{ padding: "12px 24px", background: "#10B981", color: "#fff", border: "none", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 15 }}
+                            >✓ Accept Fix</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </div>
     );
 }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UnauthorizedException, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UnauthorizedException, UseGuards, BadRequestException } from '@nestjs/common';
 import { MemberService } from './member.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
 import { LoginDto } from 'src/libs/dto/member/login.dto';
@@ -12,7 +12,7 @@ import { ForgetPasswordDto, UpdateMemberDto } from 'src/libs/dto/member/update-m
 
 @Controller('member')
 export class MemberController {
-	constructor(private readonly memberService: MemberService) {}
+	constructor(private readonly memberService: MemberService) { }
 
 	// test API
 	@Get('test')
@@ -44,6 +44,22 @@ export class MemberController {
 	): Promise<MemberResponse> {
 		console.log('member controller -> forgetPassword: ');
 		return this.memberService.forgetPassword(authmember, input);
+	}
+
+	// Stateless Forgot Password (public)
+	@Post('forgot-password-flow')
+	public async requestPasswordReset(@Body('email') email: string): Promise<{ success: boolean; message: string }> {
+		if (!email) throw new BadRequestException('Email is required');
+		return this.memberService.requestPasswordReset(email);
+	}
+
+	// Stateless Reset Password (public)
+	@Post('reset-password-flow')
+	public async executePasswordReset(@Body() input: any): Promise<{ success: boolean; message: string }> {
+		if (!input.token || !input.password) {
+			throw new BadRequestException('Token and password are required');
+		}
+		return this.memberService.executePasswordReset(input.token, input.password);
 	}
 
 	// admin signup API — only existing super_admin can create new admins

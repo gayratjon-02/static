@@ -78,7 +78,7 @@ function BrandEditContent() {
                 setIndustries(cfg.industries);
                 setVoiceOptions(cfg.voices);
             })
-            .catch(() => setError("Brand topilmadi"))
+            .catch(() => setError("Brand not found"))
             .finally(() => setLoading(false));
     }, [id]);
 
@@ -102,7 +102,7 @@ function BrandEditContent() {
             }));
             if (data.logo_url) setLogoPreview(data.logo_url);
         } catch (err: any) {
-            setImportError(err.message || "Import muvaffaqiyatsiz");
+            setImportError(err.message || "Import failed");
         } finally {
             setImportLoading(false);
         }
@@ -131,8 +131,8 @@ function BrandEditContent() {
     };
 
     const handleSave = async () => {
-        if (!form.name.trim()) { setError("Brand nomi majburiy"); return; }
-        if (!form.primary_color || !form.secondary_color) { setError("Asosiy va ikkinchi ranglar majburiy"); return; }
+        if (!form.name.trim()) { setError("Brand name is required"); return; }
+        if (!form.primary_color || !form.secondary_color) { setError("Primary and secondary colors are required"); return; }
         setSaving(true);
         setError(null);
         try {
@@ -153,7 +153,7 @@ function BrandEditContent() {
             setSuccess(true);
             setTimeout(() => router.push("/dashboard"), 1200);
         } catch (err: any) {
-            setError(err.message || "Saqlashda xato");
+            setError(err.message || "Save failed");
         } finally {
             setSaving(false);
         }
@@ -161,7 +161,7 @@ function BrandEditContent() {
 
     if (loading) return (
         <div style={{ minHeight: "100vh", background: "#0d1117", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <div style={{ color: "#64ffda", fontSize: 16 }}>Yuklanmoqda...</div>
+            <div style={{ color: "#64ffda", fontSize: 16 }}>Loading...</div>
         </div>
     );
 
@@ -173,9 +173,9 @@ function BrandEditContent() {
                     onClick={() => router.push("/dashboard")}
                     style={{ background: "none", border: "1px solid #30363d", borderRadius: 8, color: "#8b949e", padding: "8px 14px", cursor: "pointer", fontSize: 14 }}
                 >
-                    ← Orqaga
+                    ← Back
                 </button>
-                <h1 style={{ color: "#e6edf3", fontSize: 20, fontWeight: 600, margin: 0 }}>Brand tahrirlash</h1>
+                <h1 style={{ color: "#e6edf3", fontSize: 20, fontWeight: 600, margin: 0 }}>Edit Brand</h1>
             </div>
 
             <div style={{ maxWidth: 720, margin: "0 auto", padding: "32px 24px", display: "flex", flexDirection: "column", gap: 24 }}>
@@ -183,10 +183,10 @@ function BrandEditContent() {
                 {/* URL Import Section */}
                 <div style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 12, padding: 20 }}>
                     <div style={{ color: "#e6edf3", fontWeight: 600, fontSize: 15, marginBottom: 6 }}>
-                        🔗 Websitedan import qilish
+                        🔗 Import from website
                     </div>
                     <div style={{ color: "#8b949e", fontSize: 13, marginBottom: 12 }}>
-                        Brand saytining URL ini kiriting — nom, tavsif, ranglar avtomatik to'ldiriladi
+                        Enter your brand website URL — name, description and colors will be filled automatically
                     </div>
                     <div style={{ display: "flex", gap: 10 }}>
                         <input
@@ -247,7 +247,7 @@ function BrandEditContent() {
                                         color: "#e6edf3", padding: "8px 16px", cursor: "pointer", fontSize: 13
                                     }}
                                 >
-                                    {logoUploading ? "Yuklanmoqda..." : "Logo yuklash"}
+                                    {logoUploading ? "Uploading..." : "Upload logo"}
                                 </button>
                                 <div style={{ color: "#8b949e", fontSize: 12, marginTop: 4 }}>PNG, JPG, WEBP · Max 10MB</div>
                             </div>
@@ -261,26 +261,26 @@ function BrandEditContent() {
 
                     {/* Name */}
                     <div>
-                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Brand nomi *</label>
+                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Brand name *</label>
                         <input
                             value={form.name}
                             onChange={(e) => setForm({ ...form, name: e.target.value })}
                             maxLength={100}
                             style={inputStyle}
-                            placeholder="Masalan: Nike, Apple"
+                            placeholder="e.g. Nike, Apple"
                         />
                     </div>
 
                     {/* Description */}
                     <div>
-                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Brand tavsifi *</label>
+                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Brand description *</label>
                         <textarea
                             value={form.description}
                             onChange={(e) => setForm({ ...form, description: e.target.value })}
                             maxLength={500}
                             rows={3}
                             style={{ ...inputStyle, resize: "vertical" }}
-                            placeholder="Brand nima qiladi, kimga xizmat qiladi..."
+                            placeholder="What the brand does, who it serves..."
                         />
                         <div style={{ color: "#8b949e", fontSize: 12, textAlign: "right" }}>{form.description.length}/500</div>
                     </div>
@@ -298,13 +298,13 @@ function BrandEditContent() {
 
                     {/* Industry */}
                     <div>
-                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Soha *</label>
+                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Industry *</label>
                         <select
                             value={form.industry}
                             onChange={(e) => setForm({ ...form, industry: e.target.value })}
                             style={{ ...inputStyle, cursor: "pointer" }}
                         >
-                            <option value="">Tanlang...</option>
+                            <option value="">Select...</option>
                             {industries.map((i) => (
                                 <option key={i.id} value={i.id}>{i.label}</option>
                             ))}
@@ -313,13 +313,13 @@ function BrandEditContent() {
 
                     {/* Colors */}
                     <div>
-                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 10 }}>Brand ranglari</label>
+                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 10 }}>Brand colors</label>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                             {[
-                                { key: "primary_color", label: "Asosiy rang *" },
-                                { key: "secondary_color", label: "Ikkinchi rang *" },
-                                { key: "accent_color", label: "Accent rang" },
-                                { key: "background_color", label: "Fon rangi" },
+                                { key: "primary_color", label: "Primary color *" },
+                                { key: "secondary_color", label: "Secondary color *" },
+                                { key: "accent_color", label: "Accent color" },
+                                { key: "background_color", label: "Background color" },
                             ].map(({ key, label }) => (
                                 <div key={key}>
                                     <div style={{ color: "#8b949e", fontSize: 12, marginBottom: 6 }}>{label}</div>
@@ -345,7 +345,7 @@ function BrandEditContent() {
 
                     {/* Voice Tags */}
                     <div>
-                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 10 }}>Brand ovozi & toni</label>
+                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 10 }}>Brand voice & tone</label>
                         <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
                             {voiceOptions.map((v) => {
                                 const selected = form.voice_tags.includes(v.id);
@@ -370,25 +370,25 @@ function BrandEditContent() {
 
                     {/* Target Audience */}
                     <div>
-                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Maqsadli auditoriya</label>
+                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Target audience</label>
                         <textarea
                             value={form.target_audience}
                             onChange={(e) => setForm({ ...form, target_audience: e.target.value })}
                             maxLength={300}
                             rows={2}
                             style={{ ...inputStyle, resize: "vertical" }}
-                            placeholder="Masalan: 25-45 yoshli erkaklar, sport bilan shug'ullanuvchilar"
+                            placeholder="e.g. Men 25-45, interested in sports"
                         />
                     </div>
 
                     {/* Competitors */}
                     <div>
-                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Raqobatchilar (ixtiyoriy)</label>
+                        <label style={{ color: "#8b949e", fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>Competitors (optional)</label>
                         <input
                             value={form.competitors}
                             onChange={(e) => setForm({ ...form, competitors: e.target.value })}
                             style={inputStyle}
-                            placeholder="Masalan: Nike, Adidas, Puma"
+                            placeholder="e.g. Nike, Adidas, Puma"
                         />
                     </div>
                 </div>
@@ -401,7 +401,7 @@ function BrandEditContent() {
                 )}
                 {success && (
                     <div style={{ background: "rgba(35,134,54,0.15)", border: "1px solid #23863640", borderRadius: 8, padding: "12px 16px", color: "#3fb950", fontSize: 14 }}>
-                        ✅ Brand muvaffaqiyatli saqlandi! Dashboard ga yo'naltirilmoqda...
+                        ✅ Brand saved successfully! Redirecting to dashboard...
                     </div>
                 )}
 
@@ -414,7 +414,7 @@ function BrandEditContent() {
                             color: "#8b949e", padding: "12px 24px", cursor: "pointer", fontSize: 15
                         }}
                     >
-                        Bekor qilish
+                        Cancel
                     </button>
                     <button
                         onClick={handleSave}
@@ -425,7 +425,7 @@ function BrandEditContent() {
                             fontSize: 15, fontWeight: 600, minWidth: 140
                         }}
                     >
-                        {saving ? "Saqlanmoqda..." : "💾 Saqlash"}
+                        {saving ? "Saving..." : "💾 Save"}
                     </button>
                 </div>
             </div>

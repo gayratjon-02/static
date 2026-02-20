@@ -79,6 +79,9 @@ export interface AdLibraryItem {
     _id: string;
     name: string;
     image: string;
+    image_url_1x1?: string;
+    image_url_9x16?: string;
+    image_url_16x9?: string;
     created_at: string;
     brand_name: string;
     brand_color: string;

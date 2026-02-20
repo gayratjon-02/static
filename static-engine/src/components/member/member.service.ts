@@ -12,7 +12,9 @@ import { DatabaseService } from '../../database/database.service';
 import { MemberStatus } from '../../libs/enums/common.enum';
 import { Message } from '../../libs/enums/common.enum';
 import * as bcrypt from 'bcrypt';
+import * as jwt from 'jsonwebtoken';
 import { EmailService } from '../email/email.service';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class MemberService {
@@ -20,6 +22,7 @@ export class MemberService {
 		private authService: AuthService,
 		private databaseService: DatabaseService,
 		private emailService: EmailService,
+		private configService: ConfigService,
 	) { }
 
 	// test method
@@ -53,6 +56,58 @@ export class MemberService {
 	// admin login method
 	public async adminLogin(input: AdminLoginDto): Promise<AdminAuthResponse> {
 		return await this.authService.adminLogin(input);
+	}
+
+	// Request password reset (stateless via short-lived JWT)
+	public async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+		const { data: user } = await this.databaseService.client
+			.from('users')
+			.select('_id, full_name, member_status')
+			.eq('email', email)
+			.single();
+
+		// Always return success to prevent email enumeration attacks
+		if (!user || user.member_status === 'deleted' || user.member_status === 'suspended') {
+			return { success: true, message: 'If an account exists, a reset email will be sent.' };
+		}
+
+		const secret = this.configService.get<string>('JWT_SECRET');
+		const token = jwt.sign({ id: user._id, purpose: 'reset_password' }, secret, { expiresIn: '1h' });
+
+		const frontendUrl = this.configService.get<string>('FRONTEND_URL');
+		const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+
+		this.emailService.sendPasswordReset(email, resetLink, user.full_name).catch(console.error);
+
+		return { success: true, message: 'If an account exists, a reset email will be sent.' };
+	}
+
+	// Execute password reset
+	public async executePasswordReset(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+		try {
+			const secret = this.configService.get<string>('JWT_SECRET');
+			const decoded: any = jwt.verify(token, secret);
+
+			if (decoded.purpose !== 'reset_password') {
+				throw new BadRequestException('Invalid token purpose');
+			}
+
+			const password_hash = await this.authService.hashPassword(newPassword);
+
+			const { error } = await this.databaseService.client
+				.from('users')
+				.update({ password_hash, updated_at: new Date() })
+				.eq('_id', decoded.id);
+
+			if (error) {
+				throw new InternalServerErrorException('Failed to reset password');
+			}
+
+			return { success: true, message: 'Password has been successfully reset' };
+		} catch (err) {
+			console.error('Execute password reset error:', err);
+			throw new BadRequestException('Invalid or expired reset token');
+		}
 	}
 
 	// forgetPassword — update password (when logged in)

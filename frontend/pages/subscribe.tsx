@@ -3,40 +3,19 @@ import { useRouter } from "next/router";
 import AuthGuard from "../libs/auth/AuthGuard";
 import { createCheckoutRequest } from "../server/user/billing";
 
-const PLANS = [
-    {
-        tier: "starter",
-        label: "Starter",
-        price: "$39",
-        interval: "/mo",
-        credits: "250 credits/mo",
-        features: ["250 image generations", "Up to 3 brands", "Standard support"],
-    },
-    {
-        tier: "pro",
-        label: "Pro",
-        price: "$99",
-        interval: "/mo",
-        credits: "750 credits/mo",
-        features: ["750 image generations", "Up to 10 brands", "Priority support"],
-        highlight: true,
-    },
-    {
-        tier: "growth",
-        label: "Growth",
-        price: "$199",
-        interval: "/mo",
-        credits: "2,000 credits/mo",
-        features: ["2,000 image generations", "Unlimited brands", "Dedicated support"],
-    },
-];
+const planInfo: Record<string, { label: string; monthlyPrice: number; yearlyMonthly: number; yearlyTotal: number; credits: string; features: string[]; highlight?: boolean }> = {
+    starter: { label: "Starter", monthlyPrice: 39, yearlyMonthly: 33, yearlyTotal: 390, credits: "250 credits/mo", features: ["250 image generations", "Up to 3 brands", "Standard support"] },
+    pro: { label: "Pro", monthlyPrice: 99, yearlyMonthly: 83, yearlyTotal: 990, credits: "750 credits/mo", features: ["750 image generations", "Up to 10 brands", "Priority support"], highlight: true },
+    growth: { label: "Growth", monthlyPrice: 199, yearlyMonthly: 166, yearlyTotal: 1990, credits: "2,000 credits/mo", features: ["2,000 image generations", "Unlimited brands", "Dedicated support"] },
+};
 
 function SubscribePage() {
     const router = useRouter();
     const [loading, setLoading] = useState<string | null>(null);
     const [error, setError] = useState("");
+    const [billingInterval, setBillingInterval] = useState<"monthly" | "annual">("monthly");
 
-    // Agar allaqachon aktiv obuna bo'lsa → dashboard
+    // If already has active subscription → dashboard
     useEffect(() => {
         try {
             const stored = localStorage.getItem("se_member");
@@ -57,7 +36,7 @@ function SubscribePage() {
         setLoading(tier);
         setError("");
         try {
-            const { checkout_url } = await createCheckoutRequest(tier, "monthly");
+            const { checkout_url } = await createCheckoutRequest(tier, billingInterval);
             window.location.href = checkout_url;
         } catch (err: any) {
             setError(err.message || "Failed to start checkout. Please try again.");
@@ -107,6 +86,68 @@ function SubscribePage() {
                     </p>
                 </div>
 
+                {/* Monthly / Yearly Toggle */}
+                <div style={{ display: "flex", justifyContent: "center", marginBottom: 32 }}>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+                        <div
+                            style={{
+                                position: "relative",
+                                display: "flex",
+                                background: "rgba(255,255,255,0.05)",
+                                border: "1px solid rgba(255,255,255,0.08)",
+                                borderRadius: 30,
+                                padding: 4,
+                                cursor: "pointer",
+                                width: 220,
+                            }}
+                        >
+                            <div style={{
+                                position: "absolute",
+                                top: 4,
+                                left: billingInterval === "monthly" ? 4 : "calc(50% + 2px)",
+                                width: "calc(50% - 6px)",
+                                height: "calc(100% - 8px)",
+                                background: "rgba(62,207,207,0.15)",
+                                border: "1px solid rgba(62,207,207,0.3)",
+                                borderRadius: 24,
+                                transition: "left 0.25s cubic-bezier(0.4, 0, 0.2, 1)",
+                                pointerEvents: "none",
+                            }} />
+                            <button
+                                type="button"
+                                onClick={() => setBillingInterval("monthly")}
+                                style={{
+                                    flex: 1, padding: "8px 16px", border: "none", background: "transparent",
+                                    fontSize: 14, fontWeight: 600, color: billingInterval === "monthly" ? "#3ECFCF" : "var(--muted)",
+                                    cursor: "pointer", zIndex: 1, borderRadius: 24, transition: "color 0.2s"
+                                }}
+                            >
+                                Monthly
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setBillingInterval("annual")}
+                                style={{
+                                    flex: 1, padding: "8px 16px", border: "none", background: "transparent",
+                                    fontSize: 14, fontWeight: 600, color: billingInterval === "annual" ? "#3ECFCF" : "var(--muted)",
+                                    cursor: "pointer", zIndex: 1, borderRadius: 24, transition: "color 0.2s"
+                                }}
+                            >
+                                Yearly
+                            </button>
+                        </div>
+                        {billingInterval === "annual" && (
+                            <div style={{
+                                background: "linear-gradient(90deg, rgba(62,207,207,0.1), rgba(120,80,255,0.1))",
+                                border: "1px solid rgba(62,207,207,0.3)", borderRadius: 20, padding: "4px 12px",
+                                fontSize: 11, fontWeight: 700, color: "#3ECFCF"
+                            }}>
+                                🎉 2 months free — save up to $478/yr
+                            </div>
+                        )}
+                    </div>
+                </div>
+
                 {/* Error */}
                 {error && (
                     <div style={{
@@ -120,9 +161,9 @@ function SubscribePage() {
 
                 {/* Plans grid */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 20 }}>
-                    {PLANS.map((plan) => (
+                    {(Object.entries(planInfo) as [string, typeof planInfo[string]][]).map(([tier, plan]) => (
                         <div
-                            key={plan.tier}
+                            key={tier}
                             style={{
                                 background: plan.highlight
                                     ? "linear-gradient(135deg, rgba(62,207,207,0.1), rgba(120,80,255,0.08))"
@@ -149,10 +190,15 @@ function SubscribePage() {
                             </div>
                             <div style={{ marginBottom: 4 }}>
                                 <span style={{ fontSize: 32, fontWeight: 800, color: plan.highlight ? "#3ECFCF" : "var(--text)" }}>
-                                    {plan.price}
+                                    ${billingInterval === "annual" ? plan.yearlyMonthly : plan.monthlyPrice}
                                 </span>
-                                <span style={{ fontSize: 14, color: "var(--muted)" }}>{plan.interval}</span>
+                                <span style={{ fontSize: 14, color: "var(--muted)" }}>/mo</span>
                             </div>
+                            {billingInterval === "annual" && (
+                                <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 4 }}>
+                                    ${plan.yearlyTotal} billed yearly
+                                </div>
+                            )}
                             <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 20 }}>{plan.credits}</div>
 
                             <ul style={{ listStyle: "none", padding: 0, margin: "0 0 24px", display: "flex", flexDirection: "column", gap: 8 }}>
@@ -164,18 +210,18 @@ function SubscribePage() {
                             </ul>
 
                             <button
-                                onClick={() => handleChoosePlan(plan.tier)}
+                                onClick={() => handleChoosePlan(tier)}
                                 disabled={!!loading}
                                 style={{
                                     width: "100%", padding: "12px 0", borderRadius: 10, border: "none",
                                     fontWeight: 700, fontSize: 14, cursor: loading ? "not-allowed" : "pointer",
                                     background: plan.highlight ? "#3ECFCF" : "rgba(255,255,255,0.08)",
                                     color: plan.highlight ? "#0a0a0f" : "var(--text)",
-                                    opacity: loading && loading !== plan.tier ? 0.5 : 1,
+                                    opacity: loading && loading !== tier ? 0.5 : 1,
                                     transition: "opacity 0.15s",
                                 }}
                             >
-                                {loading === plan.tier ? "Redirecting..." : `Get ${plan.label}`}
+                                {loading === tier ? "Redirecting..." : `Get ${plan.label}`}
                             </button>
                         </div>
                     ))}

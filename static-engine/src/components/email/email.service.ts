@@ -101,4 +101,18 @@ export class EmailService {
         `;
         await this.send(to, subject, html);
     }
+
+    /** Reset password email */
+    async sendPasswordReset(to: string, resetLink: string, fullName?: string): Promise<void> {
+        const subject = "Reset your password — Static Engine";
+        const html = `
+            <h2>Hello${fullName ? `, ${fullName}` : ''}!</h2>
+            <p>You requested a password reset for your Static Engine account.</p>
+            <p>Please click the link below to set a new password. This link will expire in 1 hour.</p>
+            <p><a href="${resetLink}" target="_blank">Reset Password</a></p>
+            <p>If you did not request this, please ignore this email.</p>
+            <p>— The Static Engine team</p>
+        `;
+        await this.send(to, subject, html);
+    }
 }
