@@ -1,0 +1,14 @@
+# Developer docs (not for git)
+ROADMAP.md
+static-engine-postman.json
+*.postman.json
+*.postman_collection.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/*
+!.vscode/settings.json
+.idea/

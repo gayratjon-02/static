@@ -1,0 +1,197 @@
+{
+    "info": {
+        "name": "Static Engine — Generation Test",
+        "description": "Postman collection for testing the full ad generation flow",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://167.172.90.235:3007"
+        },
+        {
+            "key": "token",
+            "value": ""
+        },
+        {
+            "key": "batch_id",
+            "value": ""
+        }
+    ],
+    "item": [
+        {
+            "name": "1. Login",
+            "request": {
+                "method": "POST",
+                "url": "{{base_url}}/member/login",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"email\": \"your@email.com\",\n  \"password\": \"yourpassword\"\n}"
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "exec": [
+                            "var json = pm.response.json();",
+                            "if (json.accessToken) {",
+                            "  pm.collectionVariables.set('token', json.accessToken);",
+                            "  console.log('Token saved!');",
+                            "}"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "2. Get Brands",
+            "request": {
+                "method": "GET",
+                "url": "{{base_url}}/brand/getBrands?page=1&limit=10",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "3. Get Products (by brand_id)",
+            "request": {
+                "method": "GET",
+                "url": "{{base_url}}/product/getProducts/BRAND_ID_HERE?page=1&limit=10",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "4. Get Concepts",
+            "request": {
+                "method": "GET",
+                "url": "{{base_url}}/concept/getConcepts?page=1&limit=10",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "5. Create Generation ⚡",
+            "request": {
+                "method": "POST",
+                "url": "{{base_url}}/generation/createGeneration",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    },
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"brand_id\": \"BRAND_ID_HERE\",\n  \"product_id\": \"PRODUCT_ID_HERE\",\n  \"concept_id\": \"CONCEPT_ID_HERE\",\n  \"important_notes\": \"Test generation from Postman\"\n}"
+                }
+            },
+            "event": [
+                {
+                    "listen": "test",
+                    "script": {
+                        "exec": [
+                            "var json = pm.response.json();",
+                            "if (json.batch_id) {",
+                            "  pm.collectionVariables.set('batch_id', json.batch_id);",
+                            "  console.log('batch_id saved: ' + json.batch_id);",
+                            "}"
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "6. Get Batch Status (polling)",
+            "request": {
+                "method": "GET",
+                "url": "{{base_url}}/generation/getBatchStatus/{{batch_id}}",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "7. Get Results (single ad)",
+            "request": {
+                "method": "GET",
+                "url": "{{base_url}}/generation/getResults/AD_ID_HERE",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "8. Get Recent Ads",
+            "request": {
+                "method": "GET",
+                "url": "{{base_url}}/generation/getRecent",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "9. Get Usage (credits)",
+            "request": {
+                "method": "GET",
+                "url": "{{base_url}}/member/getUsage",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}"
+                    }
+                ]
+            }
+        },
+        {
+            "name": "GEMINI TEST — Direct API Check",
+            "request": {
+                "method": "POST",
+                "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key=YOUR_GEMINI_API_KEY",
+                "header": [
+                    {
+                        "key": "Content-Type",
+                        "value": "application/json"
+                    }
+                ],
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"contents\": [{\n    \"parts\": [{\n      \"text\": \"Generate a simple blue square image\"\n    }]\n  }],\n  \"generationConfig\": {\n    \"responseModalities\": [\"TEXT\", \"IMAGE\"]\n  }\n}"
+                }
+            }
+        }
+    ]
+}

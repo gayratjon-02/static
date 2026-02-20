@@ -1,0 +1,77 @@
+/* ===== Static Engine — Shared Design Tokens ===== */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,wght@0,400;0,500;0,600;0,700;1,600&family=Space+Grotesk:wght@500;600;700&display=swap');
+
+:root {
+  /* Background */
+  --bg: #0B0E1A;
+  --bg-card: #111528;
+  --bg-hover: #181D35;
+  --bg-input: #0D1020;
+
+  /* Border */
+  --border: #1E2340;
+  --border-focus: #3ECFCF;
+
+  /* Text */
+  --text: #E8EAF0;
+  --muted: #6B7194;
+  --dim: #4A5072;
+
+  /* Accent & Gradient */
+  --accent: #3ECFCF;
+  --accent-hover: #5EDDDD;
+  --g1: #3B82F6;
+  --g2: #3ECFCF;
+  --gradient: linear-gradient(135deg, var(--g1), var(--g2));
+
+  /* Semantic */
+  --red: #EF4444;
+  --green: #22C55E;
+  --yellow: #F59E0B;
+  --purple: #A855F7;
+
+  /* Font */
+  --font-body: 'DM Sans', sans-serif;
+  --font-display: 'Space Grotesk', sans-serif;
+}
+
+/* ===== Keyframes ===== */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideRight {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-10px); }
+}
+@keyframes glow {
+  0%, 100% { opacity: 0.3; }
+  50%      { opacity: 0.6; }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; }
+  50%      { opacity: 0.8; }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* ===== Global Helpers ===== */
+.grad-text {
+  background: var(--gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.grad-bg {
+  background: var(--gradient);
+}

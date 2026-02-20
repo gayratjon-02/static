@@ -1,0 +1,73 @@
+services:
+  static-engine-backend:
+    container_name: static-engine
+    build: .
+    restart: always
+    env_file:
+      - .env
+    ports:
+      - "4009:5009"
+    environment:
+      NODE_ENV: production
+      PORT_API: 5009
+
+      DATABASE_URL: ${DATABASE_URL}
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: 0
+
+      # AI Keys
+      CLAUDE_API_KEY: ${ANTHROPIC_API_KEY}
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-pro-image-preview}
+
+      # Auth
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: 7d
+      SECRET_TOKEN: ${JWT_SECRET}
+
+      # CORS
+      FRONTEND_URL: ${FRONTEND_URL:-http://167.172.90.235:4010}
+
+      # Stripe
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET}
+
+      # AWS S3
+      AWS_BUCKET_NAME: ${AWS_BUCKET_NAME}
+      AWS_BUCKET_REGION: ${AWS_BUCKET_REGION}
+      ACCESS_KEY: ${ACCESS_KEY}
+      SECRET_KEY_AWS: ${SECRET_KEY_AWS}
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    volumes:
+      - ./uploads:/usr/src/app/uploads
+
+    depends_on:
+      - redis
+    networks:
+      - backend-network
+
+  redis:
+    container_name: static-engine-redis
+    image: redis:7-alpine
+    restart: always
+    command: >
+      sh -c "redis-server --appendonly yes ${REDIS_PASSWORD:+--requirepass ${REDIS_PASSWORD}}"
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend-network
+
+volumes:
+  redis_data:
+
+
+networks:
+  backend-network:
+    driver: bridge
