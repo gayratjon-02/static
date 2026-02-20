@@ -186,8 +186,6 @@ export class GenerationService {
 					claude_variation: claudeVariations[i] || undefined,
 				},
 				opts: {
-					attempts: 3,
-					backoff: { type: 'exponential', delay: 10000 },
 					removeOnComplete: true,
 					removeOnFail: false,
 				},
@@ -376,8 +374,6 @@ export class GenerationService {
 		};
 
 		await this.generationQueue.add('fix-errors', jobData, {
-			attempts: 2,
-			backoff: { type: 'exponential', delay: 5000 },
 			removeOnComplete: true,
 			removeOnFail: false,
 		});
@@ -484,8 +480,6 @@ export class GenerationService {
 		};
 
 		await this.generationQueue.add('create-ad', jobData, {
-			attempts: 2,
-			backoff: { type: 'exponential', delay: 5000 },
 			removeOnComplete: true,
 			removeOnFail: false,
 		});

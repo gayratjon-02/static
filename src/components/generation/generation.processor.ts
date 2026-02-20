@@ -56,8 +56,8 @@ export class GenerationProcessor extends WorkerHost {
 				this.logger.log(`Skipping cancelled job: ${generated_ad_id}`);
 				return; // User left the page — skip silently, no retry
 			} else if (adRecord.generation_status === GenerationStatus.FAILED) {
-				this.logger.log(`Resetting failed status to pending for retry: ${generated_ad_id}`);
-				await this.updateAdStatus(generated_ad_id, GenerationStatus.PENDING);
+				this.logger.warn(`Skipping job — ad ${generated_ad_id} already failed. No retries allowed.`);
+				return;
 			} else if (adRecord.generation_status !== GenerationStatus.PENDING) {
 				this.logger.warn(`Skipping job — ad ${generated_ad_id} is already ${adRecord.generation_status}`);
 				return; // Don't throw — just skip completed/processing jobs
