@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, InternalServerErrorException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, UnauthorizedException } from '@nestjs/common';
 import { AuthService } from '../auth/auth.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
 import { LoginDto } from 'src/libs/dto/member/login.dto';
@@ -48,8 +48,26 @@ export class MemberService {
 		return await this.authService.login(input);
 	}
 
-	// admin signup method
-	public async adminSignup(input: AdminSignupDto): Promise<AdminAuthResponse> {
+	// admin signup method with bypass for the first admin
+	public async adminSignupWithCheck(input: AdminSignupDto, authHeader: string): Promise<AdminAuthResponse> {
+		const { count, error: countError } = await this.databaseService.client
+			.from('admin_users')
+			.select('*', { count: 'exact', head: true });
+
+		// If there is at least 1 admin, require super_admin authentication
+		if (count && count > 0) {
+			if (!authHeader) {
+				throw new UnauthorizedException('Missing token. Only super_admin can create new admin accounts');
+			}
+			const token = authHeader.split(' ')[1];
+			if (!token) throw new UnauthorizedException('Invalid token format');
+
+			const admin = await this.authService.verifyAdminToken(token);
+			if (!admin || admin.admin_role !== 'super_admin') {
+				throw new UnauthorizedException('Only super_admin can create new admin accounts');
+			}
+		}
+
 		return await this.authService.adminSignup(input);
 	}
 

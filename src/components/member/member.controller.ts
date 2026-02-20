@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, UnauthorizedException, UseGuards, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UnauthorizedException, UseGuards, BadRequestException, Headers } from '@nestjs/common';
 import { MemberService } from './member.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
 import { LoginDto } from 'src/libs/dto/member/login.dto';
@@ -62,15 +62,10 @@ export class MemberController {
 		return this.memberService.executePasswordReset(input.token, input.password);
 	}
 
-	// admin signup API — only existing super_admin can create new admins
-	@UseGuards(AuthGuard)
+	// admin signup API — only existing super_admin can create new admins (or anyone if 0 admins exist)
 	@Post('adminSignup')
-	public async adminSignup(@Body() input: AdminSignupDto, @AuthMember() authMember: any): Promise<AdminAuthResponse> {
-		// Only super_admin can create new admin accounts
-		if (!authMember?.admin_role || authMember.admin_role !== 'super_admin') {
-			throw new UnauthorizedException('Only super_admin can create admin accounts');
-		}
-		return this.memberService.adminSignup(input);
+	public async adminSignup(@Body() input: AdminSignupDto, @Headers('authorization') authHeader: string): Promise<AdminAuthResponse> {
+		return this.memberService.adminSignupWithCheck(input, authHeader);
 	}
 
 	// admin login API
