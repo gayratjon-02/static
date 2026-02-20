@@ -54,13 +54,16 @@ export class MemberService {
 			.from('admin_users')
 			.select('*', { count: 'exact', head: true });
 
+		// Protect against literal "null" values sent from localStorage
+		const isHeaderMissing = !authHeader || authHeader === 'Bearer null' || authHeader === 'Bearer undefined';
+
 		// If there is at least 1 admin, require super_admin authentication
 		if (count && count > 0) {
-			if (!authHeader) {
+			if (isHeaderMissing) {
 				throw new UnauthorizedException('Missing token. Only super_admin can create new admin accounts');
 			}
 			const token = authHeader.split(' ')[1];
-			if (!token) throw new UnauthorizedException('Invalid token format');
+			if (!token || token === 'null' || token === 'undefined') throw new UnauthorizedException('Invalid token format');
 
 			const admin = await this.authService.verifyAdminToken(token);
 			if (!admin || admin.admin_role !== 'super_admin') {
