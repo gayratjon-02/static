@@ -1,14 +1,77 @@
-# Developer docs (not for git)
+# compiled output
+/dist
+/node_modules
+/build
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+/MVP_ROADMAP.md
+./MVP_ROADMAP.md
+MVP_ROADMAP.md/
+POSTMAN_TEST_GUIDE.md/
+./POSTMAN_TEST_GUIDE.md
+ROADMAP.md/
+./ROADMAP.md
+STRIPE_INTEGRATION_ROADMAP.md/
+./STRIPE_INTEGRATION_ROADMAP.md
+MVP_ROADMAP.md/
+./MVP_ROADMAP.md
+
+POSTMAN_TEST_GUIDE.md
+./POSTMAN_TEST_GUIDE.md
+STRIPE_INTEGRATION_ROADMAP.md
 ROADMAP.md
-static-engine-postman.json
-*.postman.json
-*.postman_collection.json
+
 
 # OS
 .DS_Store
-Thumbs.db
+/MVP_ROADMAP.md
 
-# IDE
+# Tests
+/coverage
+/.nyc_output
+
+# IDEs and editors
+/.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# IDE - VSCode
 .vscode/*
 !.vscode/settings.json
-.idea/
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# dotenv environment variable files
+.env
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+
+# temp directory
+.temp
+.tmp
+
+# Generated images (local storage)
+/uploads
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Diagnostic reports (https://nodejs.org/api/report.html)
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json

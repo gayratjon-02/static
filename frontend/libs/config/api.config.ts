@@ -1,8 +1,0 @@
-// =============================================
-// API CONFIG — Single source of truth for API URL
-// =============================================
-
-const API_BASE_URL =
-    process.env.NEXT_PUBLIC_API_URL || "http://localhost:3007";
-
-export default API_BASE_URL;
