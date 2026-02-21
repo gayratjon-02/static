@@ -114,6 +114,34 @@ export class ClaudeService {
 	}
 
 	/**
+	 * Generic completion — used by brand import and other services
+	 * that need a simple system + user prompt → text response.
+	 */
+	async complete(params: {
+		system: string;
+		messages: { role: 'user' | 'assistant'; content: string }[];
+		model?: string;
+		max_tokens?: number;
+		temperature?: number;
+	}): Promise<{ content: string }> {
+		const response = await this.client.messages.create({
+			model: params.model || 'claude-sonnet-4-5-20250929',
+			max_tokens: params.max_tokens || 1000,
+			temperature: params.temperature ?? 0.1,
+			system: params.system,
+			messages: params.messages,
+		});
+
+		const textContent = response.content.find((block) => block.type === 'text');
+		if (!textContent || textContent.type !== 'text') {
+			throw new Error('Claude API did not return text content');
+		}
+
+		this.logger.log(`Claude complete() usage: ${response.usage.input_tokens} input, ${response.usage.output_tokens} output tokens`);
+		return { content: textContent.text };
+	}
+
+	/**
 	 * Fix-Errors: original ad data + error description → yangilangan Gemini prompt
 	 */
 	async fixAdErrors(

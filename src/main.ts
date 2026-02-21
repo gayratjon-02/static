@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { LoggingInterceptor } from './libs/interceptor/Logging.interceptor';
+import { ValidationExceptionFilter } from './libs/filters/validation-exception.filter';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
 import { SanitizePipe } from './libs/pipes/sanitize.pipe';
@@ -49,6 +50,7 @@ async function bootstrap() {
 			transform: true,
 		}),
 	);
+	app.useGlobalFilters(new ValidationExceptionFilter());
 	app.useGlobalInterceptors(new LoggingInterceptor());
 
 	// ── Body size limits ───────────────────────────────────────────────────
@@ -57,13 +59,17 @@ async function bootstrap() {
 	app.useBodyParser('raw', { limit: '10mb' });
 
 	// ── CORS ───────────────────────────────────────────────────────────────
+	const corsOrigins = [
+		'http://localhost:3000',
+		'http://localhost:4010',
+	];
+	// Add production frontend URL from env (never expose raw IP to clients)
+	if (process.env.FRONTEND_URL) {
+		corsOrigins.push(process.env.FRONTEND_URL);
+	}
+
 	app.enableCors({
-		origin: [
-			'http://167.172.90.235:4010',
-			'https://167.172.90.235:4010',
-			'http://localhost:3000',
-			'http://localhost:4010',
-		],
+		origin: corsOrigins,
 		methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
 		allowedHeaders: ['Content-Type', 'Authorization'],
 		credentials: true,

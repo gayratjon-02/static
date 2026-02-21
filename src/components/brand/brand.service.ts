@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
+import { ClaudeService } from '../../libs/services/claude.service';
 import { CreateBrandDto } from '../../libs/dto/brand/create-brand.dto';
 import { UpdateBrandDto } from '../../libs/dto/brand/update-brand.dto';
 import { Message } from '../../libs/enums/common.enum';
@@ -8,10 +9,27 @@ import { T } from '../../libs/types/common';
 import { Brand } from '../../libs/types/brand/brand.type';
 import { Member } from '../../libs/types/member/member.type';
 
+export interface BrandImportResult {
+	name: string;
+	description: string;
+	website_url: string;
+	industry: string;
+	logo_url: string;
+	primary_color: string;
+	secondary_color: string;
+	accent_color: string;
+	background_color: string;
+	confidence_score: number;
+	warnings: string[];
+}
+
 @Injectable()
 export class BrandService {
 	private readonly logger = new Logger('BrandService');
-	constructor(private databaseService: DatabaseService) { }
+	constructor(
+		private databaseService: DatabaseService,
+		private claudeService: ClaudeService,
+	) { }
 
 	/** Returns config lists (industries + voices) for frontend dropdowns */
 	public getConfig() {
@@ -209,26 +227,81 @@ export class BrandService {
 	}
 
 	/**
-	 * Import brand data from a website URL.
-	 * Fetches HTML, extracts: title, description, logo, colors, industry guess.
+	 * Import brand data from a website URL using Claude AI.
+	 * Always resolves to homepage, extracts brand-level (not product-level) data.
 	 */
-	public async importFromUrl(url: string) {
+	public async importFromUrl(url: string): Promise<BrandImportResult> {
 		this.logger.log(`Importing brand from URL: ${url}`);
 
-		try {
-			// Normalize URL
-			let normalizedUrl = url.trim();
-			if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
-				normalizedUrl = `https://${normalizedUrl}`;
-			}
+		// Step 1: Resolve to homepage
+		const { homepageUrl, isProductPage } = this.resolveToHomepage(url);
+		this.logger.log(`Resolved to homepage: ${homepageUrl} (product page: ${isProductPage})`);
 
-			// Fetch HTML with timeout
+		// Step 2: Scrape homepage HTML
+		const { html, metaTags, cssColors } = await this.scrapeHomepage(homepageUrl);
+
+		// Step 3: Send to Claude for intelligent extraction
+		const brandData = await this.extractWithClaude({
+			inputUrl: url,
+			homepageUrl,
+			html,
+			metaTags,
+			cssColors,
+			isProductPage,
+		});
+
+		// Step 4: Post-process and validate
+		return this.postProcessBrandImport(brandData, homepageUrl);
+	}
+
+	/**
+	 * Always resolve to homepage root domain.
+	 * Product pages should NEVER be used for brand extraction.
+	 */
+	private resolveToHomepage(inputUrl: string): { homepageUrl: string; isProductPage: boolean } {
+		try {
+			const normalized = inputUrl.trim();
+			const url = new URL(normalized.startsWith('http') ? normalized : `https://${normalized}`);
+			const homepageUrl = `${url.protocol}//${url.hostname}/`;
+			const isProductPage = this.isProductPageUrl(url.pathname);
+			return { homepageUrl, isProductPage };
+		} catch {
+			throw new BadRequestException('Invalid URL provided');
+		}
+	}
+
+	/**
+	 * Detect common product page URL patterns.
+	 */
+	private isProductPageUrl(pathname: string): boolean {
+		const productPatterns = [
+			/\/products?\//i,
+			/\/shop\//i,
+			/\/item\//i,
+			/\/p\//i,
+			/\/catalog\//i,
+			/\/collections?\/.+\/.+/i,
+			/\/dp\//i,
+			/\/gp\/product/i,
+		];
+		return productPatterns.some((pattern) => pattern.test(pathname));
+	}
+
+	/**
+	 * Scrape homepage and extract structured data for Claude.
+	 */
+	private async scrapeHomepage(url: string): Promise<{
+		html: string;
+		metaTags: Record<string, string>;
+		cssColors: string[];
+	}> {
+		try {
 			const controller = new AbortController();
-			const timeout = setTimeout(() => controller.abort(), 10000);
-			const response = await fetch(normalizedUrl, {
+			const timeout = setTimeout(() => controller.abort(), 15000);
+			const response = await fetch(url, {
 				signal: controller.signal,
 				headers: {
-					'User-Agent': 'Mozilla/5.0 (compatible; StaticEngine/1.0; Brand Import)',
+					'User-Agent': 'Mozilla/5.0 (compatible; StaticEngineBot/1.0; +https://staticengine.com)',
 					'Accept': 'text/html,application/xhtml+xml',
 				},
 			});
@@ -238,130 +311,257 @@ export class BrandService {
 				throw new BadRequestException(`Website returned ${response.status}`);
 			}
 
-			const html = await response.text();
-			const baseUrl = new URL(normalizedUrl);
+			const fullHtml = await response.text();
 
-			// ── Extract brand name ──
-			const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-			let name = titleMatch ? titleMatch[1].trim() : baseUrl.hostname;
-			// Clean title: remove " | Site Name", " - Tagline", etc.
-			name = name.split(/\s*[|\-–—]\s*/)[0].trim();
-			if (name.length > 100) name = name.substring(0, 100);
-
-			// ── Extract description ──
-			const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([\s\S]*?)["']/i)
-				|| html.match(/<meta[^>]*content=["']([\s\S]*?)["'][^>]*name=["']description["']/i);
-			const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([\s\S]*?)["']/i);
-			let description = descMatch?.[1] || ogDescMatch?.[1] || '';
-			description = description.trim().substring(0, 500);
-
-			// ── Extract logo URL ──
-			let logo_url = '';
-			// Priority: og:image > apple-touch-icon > favicon
-			const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([\s\S]*?)["']/i);
-			const appleTouchMatch = html.match(/<link[^>]*rel=["']apple-touch-icon["'][^>]*href=["']([\s\S]*?)["']/i);
-			const faviconMatch = html.match(/<link[^>]*rel=["'](?:icon|shortcut icon)["'][^>]*href=["']([\s\S]*?)["']/i);
-
-			const rawLogo = ogImageMatch?.[1] || appleTouchMatch?.[1] || faviconMatch?.[1] || '';
-			if (rawLogo) {
-				try {
-					logo_url = new URL(rawLogo, normalizedUrl).href;
-				} catch {
-					logo_url = rawLogo;
-				}
+			// Extract meta tags
+			const metaTags: Record<string, string> = {};
+			const metaRegex = /<meta[^>]*(?:(?:property|name)=["']([^"']+)["'][^>]*content=["']([^"']*?)["']|content=["']([^"']*?)["'][^>]*(?:property|name)=["']([^"']+)["'])[^>]*>/gi;
+			let metaMatch;
+			while ((metaMatch = metaRegex.exec(fullHtml)) !== null) {
+				const key = metaMatch[1] || metaMatch[4];
+				const value = metaMatch[2] || metaMatch[3];
+				if (key && value) metaTags[key] = value;
 			}
 
-			// ── Extract colors ──
-			let primary_color = '#000000';
-			let secondary_color = '#333333';
+			// Extract title
+			const titleMatch = fullHtml.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+			if (titleMatch) metaTags['title'] = titleMatch[1].trim();
 
-			// 1. theme-color meta tag
-			const themeColorMatch = html.match(/<meta[^>]*name=["']theme-color["'][^>]*content=["'](#[0-9A-Fa-f]{3,8})["']/i)
-				|| html.match(/<meta[^>]*content=["'](#[0-9A-Fa-f]{3,8})["'][^>]*name=["']theme-color["']/i);
-			if (themeColorMatch?.[1]) {
-				primary_color = themeColorMatch[1].substring(0, 7); // trim to 6-char hex
+			// Extract logo candidates
+			const logoUrls: string[] = [];
+			const iconRegex = /<link[^>]*rel=["'][^"']*icon[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>/gi;
+			let iconMatch;
+			while ((iconMatch = iconRegex.exec(fullHtml)) !== null) {
+				logoUrls.push(this.resolveUrl(iconMatch[1], url));
 			}
-
-			// 2. Find hex colors from inline CSS
-			const hexColors = html.match(/#[0-9A-Fa-f]{6}/g) || [];
-			const colorCounts: Record<string, number> = {};
-			for (const c of hexColors) {
-				const lower = c.toLowerCase();
-				// Skip common defaults
-				if (['#000000', '#ffffff', '#333333', '#666666', '#999999', '#cccccc', '#f5f5f5', '#e5e5e5'].includes(lower)) continue;
-				colorCounts[lower] = (colorCounts[lower] || 0) + 1;
+			const headerLogoRegex = /<(?:header|div[^>]*class=["'][^"']*(?:header|logo|nav)[^"']*["'])[^>]*>[\s\S]*?<img[^>]*src=["']([^"']+)["'][^>]*>/gi;
+			let logoMatch;
+			while ((logoMatch = headerLogoRegex.exec(fullHtml)) !== null) {
+				logoUrls.push(this.resolveUrl(logoMatch[1], url));
 			}
-			const sortedColors = Object.entries(colorCounts).sort((a, b) => b[1] - a[1]);
-			if (sortedColors.length > 0 && primary_color === '#000000') {
-				primary_color = sortedColors[0][0];
+			metaTags['_logo_candidates'] = JSON.stringify(logoUrls);
+
+			// Extract CSS colors
+			const cssColors: string[] = [];
+			const styleRegex = /<style[^>]*>([\s\S]*?)<\/style>/gi;
+			let styleMatch;
+			let styleContent = '';
+			while ((styleMatch = styleRegex.exec(fullHtml)) !== null) {
+				styleContent += styleMatch[1] + '\n';
 			}
-			if (sortedColors.length > 1) {
-				secondary_color = sortedColors[1][0];
-			}
+			const hexMatches = styleContent.match(/#[0-9a-fA-F]{3,8}/g) || [];
+			cssColors.push(...hexMatches);
+			const varMatches = styleContent.match(/--[\w-]*color[\w-]*:\s*[^;]+/gi) || [];
+			cssColors.push(...varMatches);
 
-			// ── Guess industry ──
-			const lowerHtml = (name + ' ' + description).toLowerCase();
-			const industryKeywords: Record<string, BrandIndustry> = {
-				'supplement': BrandIndustry.SUPPLEMENTS,
-				'vitamin': BrandIndustry.SUPPLEMENTS,
-				'nutrition': BrandIndustry.SUPPLEMENTS,
-				'fashion': BrandIndustry.APPAREL,
-				'clothing': BrandIndustry.APPAREL,
-				'apparel': BrandIndustry.APPAREL,
-				'beauty': BrandIndustry.BEAUTY,
-				'skincare': BrandIndustry.BEAUTY,
-				'cosmetic': BrandIndustry.BEAUTY,
-				'food': BrandIndustry.FOOD_BEVERAGE,
-				'beverage': BrandIndustry.FOOD_BEVERAGE,
-				'coffee': BrandIndustry.FOOD_BEVERAGE,
-				'software': BrandIndustry.SAAS,
-				'saas': BrandIndustry.SAAS,
-				'platform': BrandIndustry.SAAS,
-				'fitness': BrandIndustry.FITNESS,
-				'gym': BrandIndustry.FITNESS,
-				'workout': BrandIndustry.FITNESS,
-				'home': BrandIndustry.HOME_GOODS,
-				'furniture': BrandIndustry.HOME_GOODS,
-				'pet': BrandIndustry.PETS,
-				'dog': BrandIndustry.PETS,
-				'cat': BrandIndustry.PETS,
-				'finance': BrandIndustry.FINANCIAL_SERVICES,
-				'invest': BrandIndustry.FINANCIAL_SERVICES,
-				'banking': BrandIndustry.FINANCIAL_SERVICES,
-				'education': BrandIndustry.EDUCATION,
-				'learn': BrandIndustry.EDUCATION,
-				'course': BrandIndustry.EDUCATION,
-				'shop': BrandIndustry.ECOMMERCE,
-				'store': BrandIndustry.ECOMMERCE,
-				'buy': BrandIndustry.ECOMMERCE,
-			};
+			// Trim HTML to essential brand-relevant parts
+			const essentialHtml = this.extractEssentialHtml(fullHtml);
 
-			let industry: BrandIndustry = BrandIndustry.OTHER;
-			for (const [keyword, ind] of Object.entries(industryKeywords)) {
-				if (lowerHtml.includes(keyword)) {
-					industry = ind;
-					break;
-				}
-			}
-
-			this.logger.log(`Import complete: "${name}" | industry: ${industry} | colors: ${primary_color}, ${secondary_color} | logo: ${logo_url ? 'found' : 'none'}`);
-
-			return {
-				name,
-				description,
-				website_url: normalizedUrl,
-				industry,
-				logo_url,
-				primary_color,
-				secondary_color,
-				accent_color: '',
-				background_color: '#FFFFFF',
-			};
+			return { html: essentialHtml, metaTags, cssColors };
 		} catch (err) {
 			if (err instanceof BadRequestException) throw err;
 			const message = err instanceof Error ? err.message : String(err);
-			this.logger.error(`Import from URL failed: ${message}`);
-			throw new BadRequestException(`Could not import brand from URL: ${message}`);
+			this.logger.error(`Failed to scrape ${url}: ${message}`);
+			throw new BadRequestException(`Could not access website: ${url}. Please check the URL and try again.`);
+		}
+	}
+
+	/**
+	 * Trim HTML to only brand-relevant sections to reduce token usage.
+	 */
+	private extractEssentialHtml(html: string): string {
+		const parts: string[] = [];
+
+		// Header
+		const headerMatch = html.match(/<header[^>]*>([\s\S]*?)<\/header>/i);
+		if (headerMatch) parts.push(`<header>${headerMatch[1].substring(0, 1500)}</header>`);
+
+		// Hero / Banner section text
+		const heroMatch = html.match(/<(?:section|div)[^>]*class=["'][^"']*(?:hero|banner)[^"']*["'][^>]*>([\s\S]*?)<\/(?:section|div)>/i);
+		if (heroMatch) {
+			const heroText = heroMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 1000);
+			if (heroText) parts.push(`<hero_text>${heroText}</hero_text>`);
+		}
+
+		// About section
+		const aboutMatch = html.match(/<(?:section|div)[^>]*(?:class|id)=["'][^"']*(?:about|mission)[^"']*["'][^>]*>([\s\S]*?)<\/(?:section|div)>/i);
+		if (aboutMatch) {
+			const aboutText = aboutMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500);
+			if (aboutText) parts.push(`<about_text>${aboutText}</about_text>`);
+		}
+
+		// Footer
+		const footerMatch = html.match(/<footer[^>]*>([\s\S]*?)<\/footer>/i);
+		if (footerMatch) {
+			const footerText = footerMatch[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 500);
+			if (footerText) parts.push(`<footer_text>${footerText}</footer_text>`);
+		}
+
+		return parts.join('\n') || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().substring(0, 3000);
+	}
+
+	/**
+	 * Send scraped data to Claude for intelligent brand extraction.
+	 */
+	private async extractWithClaude(params: {
+		inputUrl: string;
+		homepageUrl: string;
+		html: string;
+		metaTags: Record<string, string>;
+		cssColors: string[];
+		isProductPage: boolean;
+	}): Promise<BrandImportResult> {
+		const systemPrompt = `You are a brand intelligence analyst for Static Engine, an AI-powered ad creation platform. Your job is to extract BRAND-LEVEL information from a company's homepage HTML — NOT product-level data.
+
+CRITICAL RULES:
+1. You extract information about the COMPANY/BRAND, never about individual products
+2. Brand Name = the company/business name (e.g., "GlowVita", "FreshPaws", "UrbanThread"), NOT a product name
+3. Brand Description = what the company does overall, its mission, who it serves — NOT a product description
+4. If given a product page URL, you MUST extract the root domain and analyze the homepage instead
+5. Logo = site-wide logo/favicon, NOT a product image
+6. Colors = brand-level colors from the site header, footer, and primary CTAs — not product-specific colors
+
+OUTPUT FORMAT — respond ONLY with valid JSON, no markdown, no preamble:
+{
+  "brand_name": "string — the company/business name only",
+  "brand_description": "string — 1-3 sentence brand overview: what the company does, who it serves, its positioning. Max 500 chars",
+  "industry": "string — one of: ecommerce, supplements, apparel, beauty, food_beverage, saas, fitness, home_goods, pets, financial_services, education, other",
+  "website_url": "string — the homepage URL (root domain), NOT a product page",
+  "logo_url": "string | null — URL to the site logo (from header, og:image if it's a logo, or favicon). NEVER use a product image",
+  "primary_color": "string — hex code of the dominant brand color (header, buttons, CTAs)",
+  "secondary_color": "string — hex code of the secondary brand color",
+  "accent_color": "string | null — hex code of accent color if clearly present",
+  "confidence_score": "number 0-1 — how confident you are in the extraction",
+  "warnings": ["array of strings — any issues found"]
+}
+
+HANDLING EDGE CASES:
+- If the HTML contains an og:site_name meta tag, prefer that for brand_name
+- If the HTML title is "Product Name | Brand Name" or "Product Name - Brand Name", extract only the Brand Name part
+- Look for the company name in: og:site_name, <title> suffix after | or -, footer copyright text, header logo alt text
+- For colors, prioritize: CSS custom properties (--primary-color), header/nav background, main CTA button colors
+- Decode HTML entities: &ndash; → –, &amp; → &, etc. Never include raw HTML entities in output`;
+
+		const userPrompt = `Extract BRAND-LEVEL information from this website.
+
+INPUT URL (user provided): ${params.inputUrl}
+RESOLVED HOMEPAGE URL: ${params.homepageUrl}
+
+<homepage_html>
+${params.html}
+</homepage_html>
+
+<meta_tags>
+${JSON.stringify(params.metaTags, null, 2)}
+</meta_tags>
+
+<css_colors>
+${JSON.stringify(params.cssColors)}
+</css_colors>
+
+${params.isProductPage ? `NOTE: The user entered a product page URL. I have already navigated to the homepage (${params.homepageUrl}) and scraped it instead. Extract brand-level data from the homepage, NOT product data.` : ''}
+
+Remember: Extract BRAND information only. Return valid JSON.`;
+
+		try {
+			const response = await this.claudeService.complete({
+				system: systemPrompt,
+				messages: [{ role: 'user', content: userPrompt }],
+				max_tokens: 1000,
+				temperature: 0.1,
+			});
+
+			const cleaned = response.content
+				.replace(/```json\n?/g, '')
+				.replace(/```\n?/g, '')
+				.trim();
+			return JSON.parse(cleaned);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			this.logger.error(`Claude brand extraction failed: ${message}`);
+			throw new BadRequestException('Could not extract brand information. Please fill in the details manually.');
+		}
+	}
+
+	/**
+	 * Post-process: validate, clean, ensure homepage URL.
+	 */
+	private postProcessBrandImport(data: BrandImportResult, homepageUrl: string): BrandImportResult {
+		// Always force homepage URL
+		data.website_url = homepageUrl;
+
+		// Ensure warnings array exists
+		if (!Array.isArray(data.warnings)) data.warnings = [];
+
+		// Clean HTML entities
+		data.name = this.decodeHtmlEntities(data.name || '');
+		data.description = this.decodeHtmlEntities(data.description || '');
+
+		// Map Claude's brand_name/brand_description to our fields
+		if ((data as any).brand_name && !data.name) data.name = (data as any).brand_name;
+		if ((data as any).brand_description && !data.description) data.description = (data as any).brand_description;
+		// Also handle if Claude returned brand_name instead of name
+		if ((data as any).brand_name) {
+			data.name = this.decodeHtmlEntities((data as any).brand_name);
+		}
+		if ((data as any).brand_description) {
+			data.description = this.decodeHtmlEntities((data as any).brand_description);
+		}
+
+		// Validate hex colors
+		data.primary_color = this.validateHexColor(data.primary_color, '#2c3e50');
+		data.secondary_color = this.validateHexColor(data.secondary_color, '#3498db');
+		data.accent_color = this.validateHexColor(data.accent_color, '') || '';
+		if (!data.background_color) data.background_color = '#FFFFFF';
+
+		// Validate logo URL is NOT a product image
+		if (data.logo_url && this.looksLikeProductImage(data.logo_url)) {
+			data.warnings.push('Logo URL appears to be a product image. Please upload your logo manually.');
+			data.logo_url = '';
+		}
+
+		// Default confidence
+		if (typeof data.confidence_score !== 'number') data.confidence_score = 0.5;
+
+		this.logger.log(`Brand import complete: "${data.name}" | industry: ${data.industry} | confidence: ${data.confidence_score}`);
+		return data;
+	}
+
+	private looksLikeProductImage(url: string): boolean {
+		const patterns = [
+			/\/products?\//i,
+			/\/product[-_]images?\//i,
+			/\/item[-_]images?\//i,
+			/cdn\.shopify\.com\/s\/files.*\/products\//i,
+		];
+		return patterns.some((p) => p.test(url));
+	}
+
+	private decodeHtmlEntities(text: string): string {
+		return text
+			.replace(/&ndash;/g, '–')
+			.replace(/&mdash;/g, '—')
+			.replace(/&amp;/g, '&')
+			.replace(/&lt;/g, '<')
+			.replace(/&gt;/g, '>')
+			.replace(/&quot;/g, '"')
+			.replace(/&#39;/g, "'")
+			.replace(/&nbsp;/g, ' ')
+			.trim();
+	}
+
+	private validateHexColor(color: string | null | undefined, fallback: string): string {
+		if (!color) return fallback;
+		const hex = color.match(/^#?([0-9a-fA-F]{3,8})$/);
+		if (hex) return color.startsWith('#') ? color : `#${color}`;
+		return fallback;
+	}
+
+	private resolveUrl(path: string, baseUrl: string): string {
+		try {
+			return new URL(path, baseUrl).href;
+		} catch {
+			return path;
 		}
 	}
 }
