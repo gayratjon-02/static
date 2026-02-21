@@ -5,7 +5,7 @@ import { Server } from 'socket.io';
 @WebSocketGateway({
 	cors: {
 		origin: [
-			'http://167.172.90.235:4010',
+			process.env.FRONTEND_URL || 'http://localhost:3000',
 			'http://localhost:3000',
 			'http://localhost:4010',
 		],
