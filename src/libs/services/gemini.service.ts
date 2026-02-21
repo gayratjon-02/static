@@ -36,7 +36,7 @@ export class GeminiService {
 	private readonly logger = new Logger(GeminiService.name);
 
 	private readonly MODEL = GEMINI_MODEL;
-	private readonly ANALYSIS_MODEL = 'gemini-2.0-flash';
+	private readonly ANALYSIS_MODEL = 'gemini-2.5-flash-preview-04-17';
 
 	private readonly TIMEOUT_MS = 180 * 1000;
 
