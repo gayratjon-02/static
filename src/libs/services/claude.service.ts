@@ -150,14 +150,21 @@ export class ClaudeService {
 	): Promise<ClaudeResponseJson> {
 		const systemPrompt = `You are an expert Facebook ad creative director. You are fixing errors in a previously generated ad image. The user has described the issues. Your task is to generate an improved version that fixes the reported problems while keeping the same brand message and style.
 
+CRITICAL RULES FOR THE GEMINI IMAGE PROMPT:
+- NEVER include hex codes (#2c3e50, #FFFFFF, etc.) — Gemini renders them as visible text in the image
+- ALWAYS describe colors by name: "dark navy blue", "pure white", "vibrant coral pink"
+- Reference the "provided product photo" and "provided brand logo" — do NOT describe what they look like
+- Spell-check every word obsessively
+- All review quotes must be unique — never duplicate
+
 You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
 {
-  "headline": "Short, punchy headline (max 10 words)",
+  "headline": "Short, punchy headline (max 8 words)",
   "subheadline": "Supporting text (max 15 words)",
-  "body_text": "Persuasive body copy (2-3 sentences)",
+  "body_text": "Persuasive body copy (max 30 words)",
   "callout_texts": ["Callout 1", "Callout 2", "Callout 3"],
   "cta_text": "Call to action button text",
-  "gemini_image_prompt": "Extremely detailed and IMPROVED image generation prompt that fixes the reported issues. Be more specific about layout, text positioning, product placement, and visual quality."
+  "gemini_image_prompt": "IMPROVED image generation prompt that fixes the reported issues. Colors by NAME only — NEVER hex codes. Reference provided product photo and brand logo."
 }`;
 
 		const userPrompt = `Fix the following ad creative that has issues.
@@ -223,7 +230,68 @@ Generate an improved version. Keep the same ad copy/messaging but create a much 
 	}
 
 	private getFallback6VariationsSystemPrompt(): string {
-		return `You are an expert Facebook ad creative director with 15+ years of experience in direct response advertising. You create scroll-stopping static ad creatives that drive conversions. Your ads are on-brand, visually striking, and optimized for the Meta platform.
+		return `You are an expert Facebook ad creative director working for Static Engine. Your job is to write ad copy AND create a detailed image generation prompt for Gemini (Google's image AI).
+
+═══════════════════════════════════════════════════
+ABSOLUTE RULES — VIOLATING THESE RUINS THE AD
+═══════════════════════════════════════════════════
+
+RULE 1: NEVER PUT HEX CODES IN THE IMAGE PROMPT
+- NEVER: "text color #2c3e50" or "background #FFFFFF" or "use color #bd2e46"
+- ALWAYS: Describe colors by name: "dark navy blue text", "pure white background", "deep coral red accent"
+- NEVER: "primary color: #2c3e50" — Gemini will LITERALLY render "#2c3e50" as text in the image
+- ALWAYS: Convert hex to descriptive color names before writing the prompt
+- This is the #1 most critical rule. If you include ANY hex code in the Gemini prompt, it WILL appear as visible text in the generated ad image.
+
+HEX-TO-NAME CONVERSION (do this mentally before writing prompts):
+- #2c3e50 → "dark charcoal navy"
+- #FFFFFF → "pure white"
+- #000000 → "pure black"
+- #E94560 → "vibrant coral pink"
+- #676986 → "muted slate purple"
+- For any hex: describe the approximate color in plain English words
+
+RULE 2: SPELL-CHECK ALL TEXT OBSESSIVELY
+- Double-check every single word you write that will appear in the ad
+- Common AI mistakes to avoid: "chaging" (changing), "veriified" (verified), "reccommended" (recommended), "gauranteed" (guaranteed)
+- After writing all ad copy, re-read each word letter by letter
+- If you include review quotes, each one must be a DIFFERENT unique quote with correct spelling
+
+RULE 3: EVERY REVIEW/TESTIMONIAL MUST BE UNIQUE
+- NEVER repeat the same quote twice in one ad
+- NEVER use generic "Dog owner, 67" format for all reviews
+- Each review must have: unique quote text, unique reviewer name, unique detail
+- Example of 5 UNIQUE reviews:
+  * "My dog stopped barking at thunder!" — Sarah M., Golden Retriever owner
+  * "Noticed a difference within 24 hours" — James K., verified buyer
+  * "Wish I found this sooner" — Lisa R., anxious puppy mom
+  * "Our vet recommended this exact product" — Mike D., 2 dogs
+  * "Night and day difference in our home" — Emma T., rescue dog parent
+
+RULE 4: PRODUCT PHOTO HANDLING
+- The user's actual product photo will be provided to Gemini as a reference image
+- In your prompt, describe WHERE to place the product photo, do NOT describe what the product looks like
+- Say: "Place the provided product photo in the center-right of the composition"
+- Do NOT say: "A white cylindrical diffuser device plugged into a wall outlet" — this makes Gemini generate a fake product
+- The goal is for Gemini to USE the actual photo, not create an AI-imagined version
+
+RULE 5: LOGO HANDLING
+- The user's actual brand logo will be provided as a separate reference image
+- In your prompt say: "Place the provided brand logo in the bottom-right corner"
+- Do NOT describe the logo or ask Gemini to create one
+- Do NOT say: "A logo with the text 'BrandName' and an icon" — this creates a fake logo
+
+RULE 6: COLOR DESCRIPTIONS IN PROMPTS
+When the brand has specific colors, ALWAYS convert to descriptive names:
+- Instead of "Use #2c3e50 for headings" → "Use dark charcoal navy for headings"
+- Instead of "Background: #F5F0EB" → "Background: warm cream off-white"
+- Instead of "CTA button in #E94560" → "CTA button in vibrant coral pink"
+- Include a color palette description section:
+  "COLOR PALETTE: The ad uses a dark charcoal navy as the primary color, muted slate purple as secondary, and vibrant coral pink for accents and CTAs. Background is pure white for the top section."
+
+═══════════════════════════════════════════════════
+VARIATION REQUIREMENTS
+═══════════════════════════════════════════════════
 
 You MUST generate exactly 6 unique ad creative variations. Each variation should use a DIFFERENT creative angle:
 
@@ -238,7 +306,15 @@ For each variation:
 - Create a unique headline (different approach, not just rewording)
 - Write distinct body copy tailored to that angle
 - Design a completely different gemini_image_prompt with different layouts, compositions, and visual treatments
-- All variations MUST stay on-brand (same colors, typography style, brand feel)
+- All variations MUST stay on-brand (same colors described by NAME, typography style, brand feel)
+
+BEFORE OUTPUTTING: Re-read EVERY gemini_image_prompt and verify:
+- Zero hex codes anywhere (search for # followed by letters/numbers)
+- Every word correctly spelled
+- All reviews/quotes are unique (no duplicates)
+- Product placement says "provided product photo" not a description
+- Logo placement says "provided brand logo" not a description
+- Colors described by name only
 
 ${this.get6VariationsJsonSchema()}`;
 	}
@@ -248,12 +324,18 @@ ${this.get6VariationsJsonSchema()}`;
 {
   "variations": [
     {
-      "headline": "Short, punchy headline (max 10 words)",
+      "headline": "Short, punchy headline (max 8 words)",
       "subheadline": "Supporting text (max 15 words)",
-      "body_text": "Persuasive body copy (2-3 sentences)",
-      "callout_texts": ["Callout 1", "Callout 2", "Callout 3"],
+      "body_text": "Persuasive body copy (max 30 words)",
+      "callout_texts": ["array of unique callout strings — badges, features, quotes"],
       "cta_text": "Call to action button text",
-      "gemini_image_prompt": "Extremely detailed image generation prompt including: layout, colors, text placement, product photo description, background, style, mood. Must include exact text to overlay on the image."
+      "ad_copy_review": {
+        "all_text_spell_checked": true,
+        "no_hex_codes_in_prompt": true,
+        "all_reviews_unique": true,
+        "product_described_not_generated": true
+      },
+      "gemini_image_prompt": "The COMPLETE image generation prompt following ALL rules above. Describe colors by NAME only — NEVER hex codes. Reference the provided product photo and brand logo — do NOT describe them."
     }
   ]
 }
@@ -281,12 +363,18 @@ The "variations" array MUST contain exactly 6 objects. Each object represents on
 
 You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
 {
-  "headline": "Short, punchy headline (max 10 words)",
+  "headline": "Short, punchy headline (max 8 words)",
   "subheadline": "Supporting text (max 15 words)",
-  "body_text": "Persuasive body copy (2-3 sentences)",
+  "body_text": "Persuasive body copy (max 30 words)",
   "callout_texts": ["Callout 1", "Callout 2", "Callout 3"],
   "cta_text": "Call to action button text",
-  "gemini_image_prompt": "Extremely detailed image generation prompt including: layout, colors, text placement, product photo description, background, style, mood. Must include exact text to overlay on the image."
+  "ad_copy_review": {
+    "all_text_spell_checked": true,
+    "no_hex_codes_in_prompt": true,
+    "all_reviews_unique": true,
+    "product_described_not_generated": true
+  },
+  "gemini_image_prompt": "The COMPLETE image generation prompt. Colors by NAME only — NEVER hex codes. Reference provided product photo and brand logo."
 }`;
 			}
 		} catch {
@@ -297,24 +385,39 @@ You MUST respond with valid JSON only, no markdown, no code blocks. The JSON mus
 	}
 
 	private getFallbackSystemPrompt(): string {
-		return `You are an expert Facebook ad creative director with 15+ years of experience in direct response advertising. You create scroll-stopping static ad creatives that drive conversions. Your ads are on-brand, visually striking, and optimized for the Meta platform.
+		return `You are an expert Facebook ad creative director working for Static Engine. Your job is to write ad copy AND create a detailed image generation prompt for Gemini (Google's image AI).
 
-When generating ads:
-1. Analyze the brand voice and visual identity
-2. Understand the product's unique selling propositions
-3. Study the reference concept and adapt it to the brand
-4. Create compelling headlines that stop the scroll
-5. Write persuasive body copy that drives action
-6. Generate a detailed image prompt for Gemini that includes exact text overlay, positioning, colors, and styling
+ABSOLUTE RULES — VIOLATING THESE RUINS THE AD:
+
+RULE 1: NEVER PUT HEX CODES IN THE IMAGE PROMPT
+- NEVER: "text color #2c3e50" or "background #FFFFFF" — Gemini will LITERALLY render hex codes as visible text
+- ALWAYS: Describe colors by name: "dark navy blue text", "pure white background", "deep coral red accent"
+
+RULE 2: SPELL-CHECK ALL TEXT OBSESSIVELY
+- Double-check every word. Common AI mistakes: "chaging" (changing), "veriified" (verified), "reccommended" (recommended)
+
+RULE 3: EVERY REVIEW/TESTIMONIAL MUST BE UNIQUE — never repeat the same quote
+
+RULE 4: PRODUCT PHOTO — The actual photo will be provided to Gemini. Describe WHERE to place it, do NOT describe what it looks like.
+
+RULE 5: LOGO — The actual logo will be provided to Gemini. Say "Place the provided brand logo" — do NOT describe or recreate it.
+
+RULE 6: COLOR DESCRIPTIONS — Always convert hex to descriptive names in the gemini_image_prompt.
 
 You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
 {
-  "headline": "Short, punchy headline (max 10 words)",
+  "headline": "Short, punchy headline (max 8 words)",
   "subheadline": "Supporting text (max 15 words)",
-  "body_text": "Persuasive body copy (2-3 sentences)",
+  "body_text": "Persuasive body copy (max 30 words)",
   "callout_texts": ["Callout 1", "Callout 2", "Callout 3"],
   "cta_text": "Call to action button text",
-  "gemini_image_prompt": "Extremely detailed image generation prompt including: layout, colors, text placement, product photo description, background, style, mood. Must include exact text to overlay on the image."
+  "ad_copy_review": {
+    "all_text_spell_checked": true,
+    "no_hex_codes_in_prompt": true,
+    "all_reviews_unique": true,
+    "product_described_not_generated": true
+  },
+  "gemini_image_prompt": "The COMPLETE image generation prompt following ALL rules above. Colors by NAME only. Reference provided product photo and brand logo."
 }`;
 	}
 
@@ -341,32 +444,33 @@ ALL variations MUST follow this base layout:
 
 1. **TOP SECTION**:
    - Large headline: "${product.star_rating || '4.7'} ★ Rated" + short benefit phrase
-   - Clean sans-serif font, use primary brand color (${brand.primary_color})
+   - Clean sans-serif font, use the brand's primary color (${this.hexToColorName(brand.primary_color)}) — NEVER put hex codes in the prompt
    - Text MUST be sharp, fully readable, correctly spelled, and aligned properly
 
 2. **MIDDLE SECTION**:
-   - Centered product image (front-facing, realistic, clean label, NO distortion, soft shadow only)
+   - Place the PROVIDED PRODUCT PHOTO centered (do NOT generate a fake product image)
    - NO small unreadable packaging text on the product — clean label only
    - Behind the product: 3–5 review cards (white bg, soft shadow, slight angle max 15°)
-   - Each card: 5 gold stars + short testimonial (max 8 words) + first name + last initial
-   - Cards must NOT overlap the product
+   - Each card: 5 bright yellow/gold stars + short UNIQUE testimonial (max 8 words) + first name + last initial
+   - Cards must NOT overlap the product — NEVER include hex codes on review cards
    - NO random supplement claims, NO fake weight labels, NO distorted micro text
 
 3. **BOTTOM SECTION**:
-   ${product.offer_text ? `- Offer badge: "${product.offer_text}" — accent color (${brand.accent_color}) bg, white bold text` : '- No offer badge'}
+   ${product.offer_text ? `- Offer badge: "${product.offer_text}" — ${this.hexToColorName(brand.accent_color)} background, white bold text` : '- No offer badge'}
    - Review count: "${product.review_count || '3,000'}+ Happy Customers"
 
-4. **STRICT COLOR RULES**: ONLY use primary (${brand.primary_color}), secondary (${brand.secondary_color}), accent (${brand.accent_color}), white, dark navy. NO neon, NO glow, NO random gradients.
+4. **STRICT COLOR RULES**: ONLY use primary (${this.hexToColorName(brand.primary_color)}), secondary (${this.hexToColorName(brand.secondary_color)}), accent (${this.hexToColorName(brand.accent_color)}), white, dark navy. NO hex codes, NO neon, NO glow, NO random gradients.
 
 5. **TYPOGRAPHY RULES (CRITICAL)**:
    - Clean modern sans-serif ONLY
    - ALL visible text must be: sharp, fully readable, correctly spelled, aligned properly, with correct kerning and spacing
    - Strong hierarchy: headline large, testimonials medium, meta small
    - If any text cannot be rendered perfectly, DO NOT render it at all
+   - Star ratings: describe as "5 bright yellow/gold stars" not any hex color
 
-6. **FORBIDDEN**: No extra badges, no claims not in USPs, no medical claims, no fake awards, no watermarks, no text cut-off, no decorative fonts, no microscopic product packaging text, no random supplement facts.
+6. **FORBIDDEN**: No hex color codes in prompt, no extra badges, no claims not in USPs, no medical claims, no fake awards, no watermarks, no text cut-off, no decorative fonts, no microscopic product packaging text, no random supplement facts, no duplicate reviews.
 
-7. **SELF-VERIFICATION**: In each gemini_image_prompt, include: "Before generating, internally verify: all words spelled correctly, no extra words exist, no cropped letters, no deformed characters. If verification fails, regenerate."
+7. **SELF-VERIFICATION**: In each gemini_image_prompt, include: "Before generating, internally verify: all words spelled correctly, no hex codes present, no extra words exist, no cropped letters, no deformed characters, all reviews unique. If verification fails, regenerate."
 
 Each variation should differ in: headline wording, testimonial content, card arrangement, background style, and overall emphasis — but ALL must follow the Social Proof layout above.
 `;
@@ -380,15 +484,16 @@ Industry: ${brand.industry}
 Description: ${brand.description}
 Voice & Tone: ${brand.voice_tags?.join(', ') || 'professional'}
 Target Audience: ${brand.target_audience || 'General audience'}
-Colors: Primary ${brand.primary_color}, Secondary ${brand.secondary_color}, Accent ${brand.accent_color}, Background ${brand.background_color}
-${brand.logo_url ? `Logo URL: ${brand.logo_url}` : ''}
+Colors: Primary ${this.formatColor(brand.primary_color)}, Secondary ${this.formatColor(brand.secondary_color)}, Accent ${this.formatColor(brand.accent_color)}, Background ${this.formatColor(brand.background_color)}
+IMPORTANT: In your gemini_image_prompt, use the DESCRIPTIVE color names above — NEVER the hex codes.
+${brand.logo_url ? `Brand Logo: PROVIDED as reference image — do NOT describe or recreate it` : ''}
 ${brand.competitors ? `Competitors: ${brand.competitors}` : ''}
 
 === PRODUCT ===
 Name: ${product.name}
 Description: ${product.description}
 USPs: ${product.usps?.join(', ') || 'N/A'}
-${product.photo_url ? `Product Photo: ${product.photo_url}` : ''}
+${product.photo_url ? `Product Photo: PROVIDED as reference image — describe WHERE to place it, not WHAT it looks like` : ''}
 Price: ${product.price_text || 'N/A'}
 Rating: ${product.star_rating ? `${product.star_rating}/5 (${product.review_count || 0} reviews)` : 'N/A'}
 ${product.offer_text ? `Offer: ${product.offer_text}` : ''}
@@ -408,7 +513,7 @@ ${importantNotes ? `=== USER NOTES ===\n${importantNotes}` : ''}
 Generate EXACTLY 6 unique variations as a JSON object with a "variations" array. Each variation should:
 1. Use a DIFFERENT creative angle (emotional, social proof, problem-solution, feature highlight, urgency/offer, lifestyle)
 2. Have a unique headline — not just a rewording but a genuinely different approach
-3. Include a detailed gemini_image_prompt describing a 1080x1080 static image ad with text overlays, product placement, and the brand's color scheme
+3. Include a detailed gemini_image_prompt describing a 1080x1080 static image ad — use DESCRIPTIVE color names (NEVER hex codes), reference "the provided product photo" and "the provided brand logo"
 4. Each gemini_image_prompt should describe a DIFFERENT visual layout and composition`;
 	}
 
@@ -467,44 +572,45 @@ Follow this layout EXACTLY:
 1. **TOP SECTION**:
    - Large headline: "${product.star_rating || '4.7'} ★ Rated" + short benefit phrase
    - Clean sans-serif font
-   - Use primary brand color (${brand.primary_color}) for headline
+   - Use the brand's primary color (${this.hexToColorName(brand.primary_color)}) for headline — NEVER put hex codes in the prompt
    - Text MUST be sharp, fully readable, correctly spelled, and aligned properly
 
 2. **MIDDLE SECTION**:
-   - Centered product image (front-facing, realistic, clean label, NO distortion)
+   - Place the PROVIDED PRODUCT PHOTO centered (do NOT generate a fake product image)
    - NO small unreadable packaging text on the product — clean label only
    - NO random supplement claims, NO fake weight labels (e.g. 30g), NO distorted micro text
    - Subtle soft shadow only, no rotation more than 10 degrees
    - Behind the product: 3–5 review cards with:
      * White background, soft shadow, slight angle variation (max 15 degrees)
-     * Each card: 5 gold stars + short testimonial (max 8 words) + first name + last initial
-     * Cards must NOT overlap the product
+     * Each card: 5 bright yellow/gold stars + short UNIQUE testimonial (max 8 words) + first name + last initial
+     * Cards must NOT overlap the product — NEVER include hex codes on cards
 
 3. **BOTTOM SECTION**:
-   ${product.offer_text ? `- Offer badge: "${product.offer_text}" — accent color (${brand.accent_color}) background, white bold text` : '- No offer badge needed'}
+   ${product.offer_text ? `- Offer badge: "${product.offer_text}" — ${this.hexToColorName(brand.accent_color)} background, white bold text` : '- No offer badge needed'}
    - Review count line: "${product.review_count || '3,000'}+ Happy Customers" — clean typography
 
 4. **COLOR RULES** (STRICT):
    - Background: soft neutral gradient (very subtle) or clean white
-   - ONLY use: primary (${brand.primary_color}), secondary (${brand.secondary_color}), accent (${brand.accent_color}), white, dark navy text
-   - NO extra colors, NO neon glow, NO random gradients
+   - ONLY use: primary (${this.hexToColorName(brand.primary_color)}), secondary (${this.hexToColorName(brand.secondary_color)}), accent (${this.hexToColorName(brand.accent_color)}), white, dark navy text
+   - NO hex codes in the prompt, NO extra colors, NO neon glow, NO random gradients
 
 5. **TYPOGRAPHY RULES (CRITICAL)**:
    - Clean modern sans-serif ONLY
    - ALL visible text must be: sharp, fully readable, correctly spelled, aligned properly, with correct kerning and spacing
    - Strong hierarchy: headline large, testimonials medium, meta info small
+   - Star ratings: describe as "5 bright yellow/gold stars" — NEVER use hex color codes
    - If any text cannot be rendered perfectly, DO NOT render it at all
 
-6. **COMPOSITION**: Balanced spacing, clean margins, no crowded layout, no overlapping chaos. Clear visual focus on product.
+6. **COMPOSITION**: Balanced spacing, clean margins, no crowded layout, no overlapping chaos. Clear visual focus on provided product photo.
 
-7. **FORBIDDEN**: No extra badges, no random claims not in USPs, no medical claims, no fake awards, no watermarks, no text cut-off, no inconsistent star format, no decorative fonts, no microscopic product packaging text, no random supplement facts.
+7. **FORBIDDEN**: No hex color codes in prompt, no extra badges, no random claims not in USPs, no medical claims, no fake awards, no watermarks, no text cut-off, no inconsistent star format, no decorative fonts, no microscopic product packaging text, no random supplement facts, no duplicate review quotes.
 
-8. **SELF-VERIFICATION INSTRUCTION**: Include in the gemini_image_prompt: "Before generating, internally verify: all words spelled correctly, no extra words exist, no cropped letters, no deformed characters. If verification fails, regenerate."
+8. **SELF-VERIFICATION INSTRUCTION**: Include in the gemini_image_prompt: "Before generating, internally verify: all words spelled correctly, no hex codes present, all reviews unique, no extra words exist, no cropped letters, no deformed characters. If verification fails, regenerate."
 `;
 		}
 
 		return `Create a Facebook ad creative based on the following:
-		
+
 === VARIATION SETTINGS ===
 Variation Index: ${variationIndex + 1}/6
 Visual Style: ${currentStyle}
@@ -517,15 +623,16 @@ Industry: ${brand.industry}
 Description: ${brand.description}
 Voice & Tone: ${brand.voice_tags?.join(', ') || 'professional'}
 Target Audience: ${brand.target_audience || 'General audience'}
-Colors: Primary ${brand.primary_color}, Secondary ${brand.secondary_color}, Accent ${brand.accent_color}, Background ${brand.background_color}
-${brand.logo_url ? `Logo URL: ${brand.logo_url}` : ''}
+Colors: Primary ${this.formatColor(brand.primary_color)}, Secondary ${this.formatColor(brand.secondary_color)}, Accent ${this.formatColor(brand.accent_color)}, Background ${this.formatColor(brand.background_color)}
+IMPORTANT: In your gemini_image_prompt, use the DESCRIPTIVE color names above — NEVER the hex codes.
+${brand.logo_url ? `Brand Logo: PROVIDED as reference image — do NOT describe or recreate it` : ''}
 ${brand.competitors ? `Competitors: ${brand.competitors}` : ''}
 
 === PRODUCT ===
 Name: ${product.name}
 Description: ${product.description}
 USPs: ${product.usps?.join(', ') || 'N/A'}
-${product.photo_url ? `Product Photo: ${product.photo_url}` : ''}
+${product.photo_url ? `Product Photo: PROVIDED as reference image — describe WHERE to place it, not WHAT it looks like` : ''}
 Price: ${product.price_text || 'N/A'}
 Rating: ${product.star_rating ? `${product.star_rating}/5 (${product.review_count || 0} reviews)` : 'N/A'}
 ${product.offer_text ? `Offer: ${product.offer_text}` : ''}
@@ -542,10 +649,72 @@ ${concept.image_url ? `Reference Image: ${concept.image_url}` : ''}
 
 ${importantNotes ? `=== USER NOTES ===\n${importantNotes}` : ''}
 
-Generate the ad creative as JSON. 
+Generate the ad creative as JSON.
 The gemini_image_prompt must be EXTREMELY detailed and follow the "Visual Style" and "Category Rules" defined above.
-It must describe a 1080x1080 static image ad with text overlays, product placement, and the brand's color scheme.
+It must describe a 1080x1080 static image ad — use DESCRIPTIVE color names (NEVER hex codes), reference "the provided product photo" and "the provided brand logo".
 Ensure the layout is robust and does not rely on hardcoded pixel coordinates.`;
+	}
+
+	/**
+	 * Converts hex color code to a descriptive color name.
+	 * Prevents hex codes from leaking into Gemini prompts.
+	 */
+	private hexToColorName(hex: string): string {
+		if (!hex) return 'neutral color';
+		const clean = hex.replace('#', '').toLowerCase();
+
+		// Known color map
+		const colorMap: Record<string, string> = {
+			'ffffff': 'pure white',
+			'000000': 'pure black',
+			'2c3e50': 'dark charcoal navy',
+			'676986': 'muted slate purple',
+			'e94560': 'vibrant coral pink',
+			'bd2e46': 'deep crimson red',
+			'ffd700': 'bright gold',
+			'333333': 'dark charcoal',
+			'f5f5f5': 'very light gray',
+			'f5f0eb': 'warm cream off-white',
+		};
+
+		if (colorMap[clean]) return colorMap[clean];
+
+		// Approximate by RGB values
+		if (clean.length < 6) return 'neutral color';
+		const r = parseInt(clean.substring(0, 2), 16);
+		const g = parseInt(clean.substring(2, 4), 16);
+		const b = parseInt(clean.substring(4, 6), 16);
+		const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+		if (brightness > 240) return 'very light, almost white';
+		if (brightness < 30) return 'very dark, almost black';
+
+		if (Math.abs(r - g) < 20 && Math.abs(g - b) < 20) {
+			if (brightness > 180) return 'light gray';
+			if (brightness > 100) return 'medium gray';
+			return 'dark charcoal gray';
+		}
+
+		const max = Math.max(r, g, b);
+		const base =
+			max === r
+				? g > 150 ? 'warm yellow-orange' : b > 100 ? 'deep magenta pink' : 'rich red'
+				: max === g
+					? r > 150 ? 'lime yellow-green' : b > 100 ? 'teal cyan' : 'forest green'
+					: r > 100 ? 'deep purple' : g > 100 ? 'ocean teal blue' : 'deep navy blue';
+
+		if (brightness > 180) return `light ${base}`;
+		if (brightness < 80) return `dark ${base}`;
+		return base;
+	}
+
+	/**
+	 * Formats brand color as "descriptive name (hex)" for Claude context,
+	 * but emphasizes the descriptive name so Claude uses that in prompts.
+	 */
+	private formatColor(hex: string): string {
+		if (!hex) return 'not specified';
+		return `${this.hexToColorName(hex)} (original: ${hex})`;
 	}
 
 	/**

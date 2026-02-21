@@ -5,6 +5,7 @@ import { DatabaseService } from '../../database/database.service';
 import { ClaudeService } from '../../libs/services/claude.service';
 import { GeminiService, GeneratedImage } from '../../libs/services/gemini.service';
 import { StorageService } from '../../libs/services/storage.service';
+import { PromptValidatorService } from '../../libs/services/prompt-validator.service';
 import { GenerationGateway } from '../../socket/generation.gateway';
 import { GenerationJobData, FixErrorsJobData, ClaudeResponseJson } from '../../libs/types/generation/generation.type';
 import { GenerationStatus } from '../../libs/enums/generation/generation.enum';
@@ -22,6 +23,7 @@ export class GenerationProcessor extends WorkerHost {
 		private storageService: StorageService,
 		private databaseService: DatabaseService,
 		private generationGateway: GenerationGateway,
+		private promptValidator: PromptValidatorService,
 	) {
 		super();
 	}
@@ -111,21 +113,26 @@ export class GenerationProcessor extends WorkerHost {
 				progress_percent: 35,
 			});
 
-			const brandColors = {
-				primary: brand.primary_color,
-				secondary: brand.secondary_color,
-				accent: brand.accent_color,
-				background: brand.background_color,
-			};
+			// ✅ Validate and clean Claude's output before sending to Gemini
+			const validation = this.promptValidator.validateGeminiPrompt(
+				claudeResponse,
+				{
+					primary: brand.primary_color,
+					secondary: brand.secondary_color,
+					accent: brand.accent_color,
+				},
+			);
 
-			let fullPrompt = claudeResponse.gemini_image_prompt;
-			if (brandColors) {
-				fullPrompt += `\n\nBrand colors: Primary ${brandColors.primary}, Secondary ${brandColors.secondary}, Accent ${brandColors.accent}, Background ${brandColors.background}`;
+			if (validation.issues.length > 0) {
+				this.logger.warn(`Generation ${generated_ad_id}: Fixed ${validation.issues.length} prompt issues: ${validation.issues.join('; ')}`);
 			}
 
-			// Send product photo + concept image as reference for 1:1
-			const referenceImages = [product.photo_url, concept.image_url].filter(Boolean);
-			this.logger.log(`Sending ${referenceImages.length} reference images to Gemini (product: ${!!product.photo_url}, concept: ${!!concept.image_url})`);
+			// Use cleaned prompt (hex codes stripped, typos fixed)
+			let fullPrompt = validation.cleanedPrompt;
+
+			// Send product photo + brand logo + concept image as reference images
+			const referenceImages = [product.photo_url, brand.logo_url, concept.image_url].filter(Boolean);
+			this.logger.log(`Sending ${referenceImages.length} reference images to Gemini (product: ${!!product.photo_url}, logo: ${!!brand.logo_url}, concept: ${!!concept.image_url})`);
 
 			// Generate all 3 ratios in parallel — all with product reference images for accuracy
 			const [result1x1, result9x16, result16x9] = await Promise.allSettled([
@@ -336,7 +343,22 @@ export class GenerationProcessor extends WorkerHost {
 				error_description,
 			);
 
-			// 4. Gemini — yangi rasmlar
+			// ✅ Validate and clean Claude's fix-errors output
+			const brandSnapshot = originalAd.brand_snapshot || {};
+			const validation = this.promptValidator.validateGeminiPrompt(
+				claudeResponse,
+				{
+					primary: brandSnapshot.primary_color || '#000000',
+					secondary: brandSnapshot.secondary_color || '#333333',
+					accent: brandSnapshot.accent_color || '#666666',
+				},
+			);
+
+			if (validation.issues.length > 0) {
+				this.logger.warn(`Fix-errors ${new_ad_id}: Fixed ${validation.issues.length} prompt issues: ${validation.issues.join('; ')}`);
+			}
+
+			// 4. Gemini — yangi rasmlar (cleaned prompt)
 			this.generationGateway.emitProgress(user_id, {
 				job_id: new_ad_id,
 				step: 'generating_images',
@@ -344,7 +366,6 @@ export class GenerationProcessor extends WorkerHost {
 				progress_percent: 35,
 			});
 
-			const brandSnapshot = originalAd.brand_snapshot || {};
 			const brandColors = {
 				primary: brandSnapshot.primary_color || '#000000',
 				secondary: brandSnapshot.secondary_color || '#333333',
@@ -353,7 +374,7 @@ export class GenerationProcessor extends WorkerHost {
 			};
 
 			const generatedImages = await this.geminiService.generateAllRatios(
-				claudeResponse.gemini_image_prompt,
+				validation.cleanedPrompt,
 				brandColors,
 			);
 

@@ -80,7 +80,8 @@ export class GeminiService {
 
 		let fullPrompt = prompt;
 		if (brandColors) {
-			fullPrompt += `\n\nBrand colors: Primary ${brandColors.primary}, Secondary ${brandColors.secondary}, Accent ${brandColors.accent}, Background ${brandColors.background}`;
+			// Convert hex colors to descriptive names to prevent them appearing as text in generated images
+			fullPrompt += `\n\nBrand color palette: Primary ${this.hexToColorName(brandColors.primary?.replace('#', '') || '333333')}, Secondary ${this.hexToColorName(brandColors.secondary?.replace('#', '') || '666666')}, Accent ${this.hexToColorName(brandColors.accent?.replace('#', '') || '999999')}, Background ${this.hexToColorName(brandColors.background?.replace('#', '') || 'ffffff')}`;
 		}
 
 		this.logger.log(`Generating images for all 3 ratios...`);
@@ -162,7 +163,7 @@ export class GeminiService {
 
 		const sanitizedPrompt = this.sanitizePromptForImageGeneration(prompt);
 
-		const enhancedPrompt = `Professional commercial advertisement photo. ${sanitizedPrompt}. High quality studio lighting, sharp details, clean background, modern minimal design. CRITICAL: Any human models must be FULLY CLOTHED.`;
+		const enhancedPrompt = `Professional commercial advertisement photo. ${sanitizedPrompt}. High quality studio lighting, sharp details, clean background, modern minimal design. CRITICAL: Any human models must be FULLY CLOTHED. Do NOT render any hex codes, color codes, or technical codes as visible text in the image. Render all text EXACTLY as specified with correct spelling.`;
 
 		const requestId = Math.random().toString(36).substring(2, 8);
 		this.logger.log(`🎨 [${requestId}] ===== IMAGEN START | ${ratioText} | Model: ${this.MODEL} =====`);
@@ -299,11 +300,12 @@ SHAPE & STRUCTURE:
 - Edges (sharp, rounded, beveled), curves, angles
 - Surface topology (flat, convex, concave, ridged, embossed)
 
-COLORS (be exact):
-- Primary color(s) with specific shade names (e.g. "matte charcoal grey", "warm ivory white", "electric teal #00C2A8")
+COLORS (be exact — use descriptive names, NEVER hex codes):
+- Primary color(s) with specific shade names (e.g. "matte charcoal grey", "warm ivory white", "electric teal")
 - Secondary and accent colors and exactly where they appear
 - Gradient, ombre, or color transition areas
 - Metallic, iridescent, or special finish colors
+- IMPORTANT: Describe all colors by name only — do NOT use hex codes like #FFFFFF or #000000
 
 MATERIALS & FINISH:
 - Material type for each part (plastic, rubber, metal, fabric, glass, silicone, etc.)
@@ -345,7 +347,7 @@ Output a dense, structured description covering every point above. Do not omit a
 
 			// Step 2: Pass the detailed product description into the Imagen prompt
 			const enrichedPrompt = productDescription
-				? `${prompt}\n\n[PRODUCT VISUAL REFERENCE — render exactly as described]: ${productDescription}`
+				? `${prompt}\n\n[PRODUCT VISUAL REFERENCE — render the product EXACTLY as described below, do NOT generate a different-looking product]: ${productDescription}`
 				: prompt;
 
 			return this.generateImage(enrichedPrompt, undefined, aspectRatio, resolution, userApiKey);
@@ -416,8 +418,64 @@ Output a dense, structured description covering every point above. Do not omit a
 
 	private sanitizePromptForImageGeneration(prompt: string): string {
 		if (!prompt) return '';
-		// Simplified sanitization for brevity, matches user intent to clean prompt
-		return prompt.replace(/\b(nude|naked|topless)\b/gi, '');
+
+		let sanitized = prompt;
+
+		// Strip hex color codes — Gemini/Imagen renders them as visible text
+		sanitized = sanitized.replace(
+			/#([0-9a-fA-F]{3,8})\b/g,
+			(_match, hex) => {
+				const colorName = this.hexToColorName(hex);
+				this.logger.warn(`Stripped hex code #${hex} from Imagen prompt, replaced with "${colorName}"`);
+				return colorName;
+			},
+		);
+
+		// Remove nude/naked/topless references
+		sanitized = sanitized.replace(/\b(nude|naked|topless)\b/gi, '');
+
+		return sanitized;
+	}
+
+	/**
+	 * Fallback hex → color name converter.
+	 * Last line of defense if Claude's prompt still contains hex codes.
+	 */
+	private hexToColorName(hex: string): string {
+		// Normalize to 6-digit hex
+		let fullHex = hex;
+		if (hex.length === 3) {
+			fullHex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+		}
+		if (fullHex.length < 6) return 'neutral color';
+
+		const r = parseInt(fullHex.substring(0, 2), 16);
+		const g = parseInt(fullHex.substring(2, 4), 16);
+		const b = parseInt(fullHex.substring(4, 6), 16);
+		const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+
+		if (brightness > 240) return 'pure white';
+		if (brightness < 30) return 'pure black';
+
+		// Check for grays
+		if (Math.abs(r - g) < 20 && Math.abs(g - b) < 20) {
+			if (brightness > 180) return 'light gray';
+			if (brightness > 100) return 'medium gray';
+			return 'dark charcoal gray';
+		}
+
+		// Dominant channel
+		const max = Math.max(r, g, b);
+		const dominantColor =
+			max === r
+				? g > 150 ? 'warm yellow-orange' : b > 100 ? 'deep magenta pink' : 'rich red'
+				: max === g
+					? r > 150 ? 'lime yellow-green' : b > 100 ? 'teal cyan' : 'forest green'
+					: r > 100 ? 'deep purple' : g > 100 ? 'ocean teal blue' : 'deep navy blue';
+
+		if (brightness > 180) return `light ${dominantColor}`;
+		if (brightness < 80) return `dark ${dominantColor}`;
+		return dominantColor;
 	}
 
 	async analyzeProduct(input: { images: string[]; productName?: string }): Promise<AnalyzedProductJSON> {
