@@ -142,54 +142,132 @@ export class ClaudeService {
 	}
 
 	/**
-	 * Fix-Errors: original ad data + error description → yangilangan Gemini prompt
+	 * Fix-Errors: analyzes ad image visually (if URL provided) + error description → improved Gemini prompt.
+	 * Uses Claude vision to identify visual issues in the generated ad image.
 	 */
 	async fixAdErrors(
 		originalAdCopy: ClaudeResponseJson,
 		errorDescription: string,
+		imageUrl?: string,
 	): Promise<ClaudeResponseJson> {
-		const systemPrompt = `You are an expert Facebook ad creative director. You are fixing errors in a previously generated ad image. The user has described the issues. Your task is to generate an improved version that fixes the reported problems while keeping the same brand message and style.
+		const systemPrompt = `You are a visual quality analyst and ad creative director for Static Engine. The user has generated a Facebook ad image but found errors in it. Your job is to:
 
-CRITICAL RULES FOR THE GEMINI IMAGE PROMPT:
-- NEVER include hex codes (#2c3e50, #FFFFFF, etc.) — Gemini renders them as visible text in the image
-- ALWAYS describe colors by name: "dark navy blue", "pure white", "vibrant coral pink"
-- Reference the "provided product photo" and "provided brand logo" — do NOT describe what they look like
-- Spell-check every word obsessively
-- All review quotes must be unique — never duplicate
+1. ANALYZE the current ad image (if provided) to identify visual issues
+2. WRITE an improved Gemini image generation prompt that fixes the issues
+3. PRESERVE everything that was correct in the original ad
+
+═══════════════════════════════════════════════════
+ANALYSIS FRAMEWORK
+═══════════════════════════════════════════════════
+
+When analyzing the ad image, check for these common AI generation issues:
+
+TEXT ISSUES:
+- Misspelled words (very common: check every single word)
+- Words cut off or overlapping
+- Text too small to read
+- Text color blending into background (poor contrast)
+- Gibberish characters or garbled text
+- Hex codes appearing as visible text (#2c3e50, #FFFFFF, etc.)
+
+PRODUCT ISSUES:
+- Product distorted, stretched, or wrong proportions
+- Product missing entirely
+- Wrong product shown (generic AI-generated instead of actual)
+- Product photo poorly integrated (floating, no shadow, wrong scale)
+
+LAYOUT ISSUES:
+- Elements overlapping
+- Unbalanced composition
+- Too much empty space or too cluttered
+- Key elements cut off at edges
+
+COLOR ISSUES:
+- Colors don't match brand palette
+- Poor contrast making text unreadable
+- Inconsistent color scheme across the ad
+
+LOGO ISSUES:
+- Logo distorted, too small, or wrong logo
+- Logo placed in wrong position
+- Logo colors incorrect
+
+═══════════════════════════════════════════════════
+OUTPUT FORMAT
+═══════════════════════════════════════════════════
 
 You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
 {
-  "headline": "Short, punchy headline (max 8 words)",
-  "subheadline": "Supporting text (max 15 words)",
+  "headline": "Short, punchy headline (max 8 words) — corrected and spell-checked",
+  "subheadline": "Supporting text (max 15 words) — corrected",
   "body_text": "Persuasive body copy (max 30 words)",
   "callout_texts": ["Callout 1", "Callout 2", "Callout 3"],
   "cta_text": "Call to action button text",
-  "gemini_image_prompt": "IMPROVED image generation prompt that fixes the reported issues. Colors by NAME only — NEVER hex codes. Reference provided product photo and brand logo."
-}`;
+  "gemini_image_prompt": "IMPROVED prompt with specific fix instructions. Colors by NAME only — NEVER hex codes."
+}
 
-		const userPrompt = `Fix the following ad creative that has issues.
+CRITICAL RULES:
+- NEVER include hex codes in the improved prompt — use color names only
+- Spell-check every word in corrected copy
+- Reference "provided product photo" and "provided brand logo" — don't describe them
+- Focus the prompt improvements specifically on the identified issues
+- Keep everything that was correct — don't change what's already good`;
 
-=== ORIGINAL AD COPY ===
-Headline: ${originalAdCopy.headline}
-Subheadline: ${originalAdCopy.subheadline}
-Body: ${originalAdCopy.body_text}
-Callouts: ${originalAdCopy.callout_texts.join(', ')}
-CTA: ${originalAdCopy.cta_text}
+		const userPromptText = `${imageUrl ? 'Analyze this Facebook ad image for visual quality issues and generate a fixed version.' : 'Fix the following ad creative based on the reported issues.'}
 
-=== ORIGINAL GEMINI IMAGE PROMPT ===
+${errorDescription ? `USER'S DESCRIPTION OF THE ISSUE:\n"${errorDescription}"\n` : 'The user did not describe specific issues. Please identify all visible problems.'}
+
+ORIGINAL AD COPY THAT SHOULD APPEAR IN THE IMAGE:
+- Headline: ${originalAdCopy.headline}
+- Subheadline: ${originalAdCopy.subheadline || 'N/A'}
+- Body: ${originalAdCopy.body_text || 'N/A'}
+- Callouts: ${JSON.stringify(originalAdCopy.callout_texts || [])}
+- CTA: ${originalAdCopy.cta_text || 'N/A'}
+
+ORIGINAL GEMINI IMAGE PROMPT:
 ${originalAdCopy.gemini_image_prompt}
 
-=== USER-REPORTED ISSUES ===
-${errorDescription || 'General quality issues — improve text clarity, product placement, and visual consistency.'}
+Please ${imageUrl ? 'analyze the image, identify issues, and' : ''} write an improved Gemini prompt that fixes them.
 
-Generate an improved version. Keep the same ad copy/messaging but create a much better gemini_image_prompt that specifically addresses the reported issues. Be very precise about text positioning, font sizes, and layout to avoid rendering errors.`;
+REMEMBER:
+- NEVER use hex codes in the improved prompt
+- Spell-check all corrected text
+- Reference "provided product photo" and "provided brand logo"
+- Fix ONLY what's broken — keep what's already good
 
-		this.logger.log('Sending fix-errors request to Claude API...');
+Return valid JSON only.`;
+
+		this.logger.log(`Sending fix-errors request to Claude API... (with image: ${!!imageUrl})`);
+
+		// Build message content — with or without image
+		let messageContent: any[];
+		if (imageUrl) {
+			try {
+				const imageBase64 = await this.downloadImageAsBase64(imageUrl);
+				messageContent = [
+					{
+						type: 'image',
+						source: {
+							type: 'base64',
+							media_type: 'image/png',
+							data: imageBase64,
+						},
+					},
+					{ type: 'text', text: userPromptText },
+				];
+				this.logger.log('Sending ad image to Claude for visual analysis');
+			} catch (imgError: any) {
+				this.logger.warn(`Failed to download ad image for vision analysis: ${imgError.message} — falling back to text-only`);
+				messageContent = [{ type: 'text', text: userPromptText }];
+			}
+		} else {
+			messageContent = [{ type: 'text', text: userPromptText }];
+		}
 
 		const response = await this.client.messages.create({
 			model: 'claude-sonnet-4-5-20250929',
 			max_tokens: 2000,
-			messages: [{ role: 'user', content: userPrompt }],
+			messages: [{ role: 'user', content: messageContent }],
 			system: systemPrompt,
 		});
 
@@ -199,8 +277,18 @@ Generate an improved version. Keep the same ad copy/messaging but create a much 
 		}
 
 		const parsed = this.parseResponse(textContent.text);
-		this.logger.log('Claude fix-errors response parsed successfully');
+		this.logger.log('Claude fix-errors response parsed successfully (vision-enhanced)');
 		return parsed;
+	}
+
+	/**
+	 * Download image from URL as base64 string (for Claude vision).
+	 */
+	private async downloadImageAsBase64(url: string): Promise<string> {
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(`Image download failed: ${response.status}`);
+		const buffer = await response.arrayBuffer();
+		return Buffer.from(buffer).toString('base64');
 	}
 
 	/**

@@ -128,17 +128,25 @@ export class GenerationProcessor extends WorkerHost {
 			}
 
 			// Use cleaned prompt (hex codes stripped, typos fixed)
-			let fullPrompt = validation.cleanedPrompt;
+			const basePrompt = validation.cleanedPrompt;
+
+			// Build brand color description for ratio-specific prompts
+			const brandColorDesc = this.buildBrandColorDescription(brand);
+
+			// Ratio-specific prompts with color preservation instructions
+			const prompt1x1 = `${basePrompt}\n\nASPECT RATIO: Square (1:1, 1080x1080). This is the base design format.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
+			const prompt9x16 = `${basePrompt}\n\nASPECT RATIO: Vertical/Stories (9:16, 1080x1920). Stack elements vertically — product in middle, text at top, CTA at bottom. More vertical whitespace between elements.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
+			const prompt16x9 = `${basePrompt}\n\nASPECT RATIO: Horizontal/Landscape (16:9, 1920x1080). Side-by-side layout — text on one side, product on the other. Single line headlines preferred.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
 
 			// Send product photo + brand logo + concept image as reference images
 			const referenceImages = [product.photo_url, brand.logo_url, concept.image_url].filter(Boolean);
 			this.logger.log(`Sending ${referenceImages.length} reference images to Gemini (product: ${!!product.photo_url}, logo: ${!!brand.logo_url}, concept: ${!!concept.image_url})`);
 
-			// Generate all 3 ratios in parallel — all with product reference images for accuracy
-			const [result1x1, result9x16, result16x9] = await Promise.allSettled([
-				this.geminiService.generateImageWithReference(fullPrompt, referenceImages, '1:1'),
-				this.geminiService.generateImageWithReference(fullPrompt, referenceImages, '9:16'),
-				this.geminiService.generateImageWithReference(fullPrompt, referenceImages, '16:9'),
+			// Generate all 3 ratios in parallel with retry logic (3 attempts each)
+			const [result1x1, result9x16, result16x9] = await Promise.all([
+				this.geminiService.generateImageWithRetry(prompt1x1, referenceImages, '1:1', `${generated_ad_id}/1:1`),
+				this.geminiService.generateImageWithRetry(prompt9x16, referenceImages, '9:16', `${generated_ad_id}/9:16`),
+				this.geminiService.generateImageWithRetry(prompt16x9, referenceImages, '16:9', `${generated_ad_id}/16:9`),
 			]);
 
 			// 6. Upload all successful results in parallel
@@ -152,34 +160,34 @@ export class GenerationProcessor extends WorkerHost {
 			const imageUrls: Record<string, string> = {};
 			const uploadTasks: Promise<void>[] = [];
 
-			if (result1x1.status === 'fulfilled' && result1x1.value?.data) {
+			if (result1x1.data) {
 				uploadTasks.push(
-					this.storageService.uploadImage(user_id, generated_ad_id, '1x1', Buffer.from(result1x1.value.data, 'base64'))
+					this.storageService.uploadImage(user_id, generated_ad_id, '1x1', Buffer.from(result1x1.data, 'base64'))
 						.then((url) => { imageUrls['1x1'] = url; })
 						.catch((err) => { this.logger.error(`Upload 1x1 failed: ${err.message}`); }),
 				);
 			} else {
-				this.logger.error(`1:1 generation failed: ${result1x1.status === 'rejected' ? result1x1.reason?.message : 'no data'}`);
+				this.logger.error(`1:1 generation failed after retries: ${result1x1.error}`);
 			}
 
-			if (result9x16.status === 'fulfilled' && result9x16.value?.data) {
+			if (result9x16.data) {
 				uploadTasks.push(
-					this.storageService.uploadImage(user_id, generated_ad_id, '9x16', Buffer.from(result9x16.value.data, 'base64'))
+					this.storageService.uploadImage(user_id, generated_ad_id, '9x16', Buffer.from(result9x16.data, 'base64'))
 						.then((url) => { imageUrls['9x16'] = url; })
 						.catch((err) => { this.logger.warn(`Upload 9x16 failed: ${err.message}`); }),
 				);
 			} else {
-				this.logger.warn(`9:16 generation failed: ${result9x16.status === 'rejected' ? result9x16.reason?.message : 'no data'}`);
+				this.logger.warn(`9:16 generation failed after retries: ${result9x16.error}`);
 			}
 
-			if (result16x9.status === 'fulfilled' && result16x9.value?.data) {
+			if (result16x9.data) {
 				uploadTasks.push(
-					this.storageService.uploadImage(user_id, generated_ad_id, '16x9', Buffer.from(result16x9.value.data, 'base64'))
+					this.storageService.uploadImage(user_id, generated_ad_id, '16x9', Buffer.from(result16x9.data, 'base64'))
 						.then((url) => { imageUrls['16x9'] = url; })
 						.catch((err) => { this.logger.warn(`Upload 16x9 failed: ${err.message}`); }),
 				);
 			} else {
-				this.logger.warn(`16:9 generation failed: ${result16x9.status === 'rejected' ? result16x9.reason?.message : 'no data'}`);
+				this.logger.warn(`16:9 generation failed after retries: ${result16x9.error}`);
 			}
 
 			await Promise.all(uploadTasks);
@@ -289,6 +297,18 @@ export class GenerationProcessor extends WorkerHost {
 		return data as Product;
 	}
 
+	/**
+	 * Build descriptive brand color string for ratio-specific prompts (no hex codes).
+	 */
+	private buildBrandColorDescription(brand: Brand): string {
+		const colors: string[] = [];
+		if (brand.primary_color) colors.push(`Primary: ${brand.primary_color}`);
+		if (brand.secondary_color) colors.push(`Secondary: ${brand.secondary_color}`);
+		if (brand.accent_color) colors.push(`Accent: ${brand.accent_color}`);
+		if (brand.background_color) colors.push(`Background: ${brand.background_color}`);
+		return colors.length > 0 ? colors.join(', ') : 'Use professional neutral tones';
+	}
+
 	private async fetchConcept(conceptId: string): Promise<AdConcept> {
 		const { data, error } = await this.databaseService.client
 			.from('ad_concepts')
@@ -322,7 +342,7 @@ export class GenerationProcessor extends WorkerHost {
 
 			const { data: originalAd, error: adError } = await this.databaseService.client
 				.from('generated_ads')
-				.select('claude_response_json, brand_id, brand_snapshot')
+				.select('claude_response_json, brand_id, brand_snapshot, product_snapshot, image_url_1x1')
 				.eq('_id', original_ad_id)
 				.single();
 
@@ -330,21 +350,23 @@ export class GenerationProcessor extends WorkerHost {
 				throw new Error(`Original ad not found: ${original_ad_id}`);
 			}
 
-			// 3. Claude API — fix errors
+			// 3. Claude API — fix errors with vision analysis of current image
 			this.generationGateway.emitProgress(user_id, {
 				job_id: new_ad_id,
 				step: 'fixing_copy',
-				message: 'AI xatolarni tuzatmoqda...',
+				message: 'AI analyzing image and fixing errors...',
 				progress_percent: 15,
 			});
 
 			const claudeResponse: ClaudeResponseJson = await this.claudeService.fixAdErrors(
 				originalAd.claude_response_json as ClaudeResponseJson,
 				error_description,
+				originalAd.image_url_1x1 || undefined, // Pass image for Claude vision analysis
 			);
 
 			// ✅ Validate and clean Claude's fix-errors output
 			const brandSnapshot = originalAd.brand_snapshot || {};
+			const productSnapshot = originalAd.product_snapshot || {};
 			const validation = this.promptValidator.validateGeminiPrompt(
 				claudeResponse,
 				{
@@ -358,53 +380,78 @@ export class GenerationProcessor extends WorkerHost {
 				this.logger.warn(`Fix-errors ${new_ad_id}: Fixed ${validation.issues.length} prompt issues: ${validation.issues.join('; ')}`);
 			}
 
-			// 4. Gemini — yangi rasmlar (cleaned prompt)
+			// 4. Gemini — generate fixed images with reference images and retry logic
 			this.generationGateway.emitProgress(user_id, {
 				job_id: new_ad_id,
 				step: 'generating_images',
-				message: 'Tuzatilgan rasmlar generatsiya qilinmoqda...',
+				message: 'Generating fixed images...',
 				progress_percent: 35,
 			});
 
-			const brandColors = {
-				primary: brandSnapshot.primary_color || '#000000',
-				secondary: brandSnapshot.secondary_color || '#333333',
-				accent: brandSnapshot.accent_color || '#666666',
-				background: brandSnapshot.background_color || '#ffffff',
-			};
+			// Build reference images from snapshots
+			const referenceImages = [
+				productSnapshot.photo_url,
+				brandSnapshot.logo_url,
+			].filter(Boolean);
+			this.logger.log(`Fix-errors: sending ${referenceImages.length} reference images to Gemini`);
 
-			const generatedImages = await this.geminiService.generateAllRatios(
-				validation.cleanedPrompt,
-				brandColors,
-			);
+			// Build brand color description for prompts
+			const brandColorDesc = this.buildBrandColorDescription(brandSnapshot as Brand);
+			const basePrompt = validation.cleanedPrompt;
+
+			// Generate all 3 ratios with retry logic
+			const [result1x1, result9x16, result16x9] = await Promise.all([
+				this.geminiService.generateImageWithRetry(
+					`${basePrompt}\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`,
+					referenceImages, '1:1', `fix-${new_ad_id}/1:1`,
+				),
+				this.geminiService.generateImageWithRetry(
+					`${basePrompt}\nCRITICAL: MAINTAIN IDENTICAL colors.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`,
+					referenceImages, '9:16', `fix-${new_ad_id}/9:16`,
+				),
+				this.geminiService.generateImageWithRetry(
+					`${basePrompt}\nCRITICAL: MAINTAIN IDENTICAL colors.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`,
+					referenceImages, '16:9', `fix-${new_ad_id}/16:9`,
+				),
+			]);
 
 			// 5. Upload
 			this.generationGateway.emitProgress(user_id, {
 				job_id: new_ad_id,
 				step: 'uploading',
-				message: 'Rasmlar saqlanmoqda...',
+				message: 'Saving fixed images...',
 				progress_percent: 65,
 			});
 
 			const imageUrls: Record<string, string> = {};
+			const uploadTasks: Promise<void>[] = [];
 
-			const uploadResults = await Promise.allSettled(
-				generatedImages.map(async (img) => {
-					const ratioKey = img.ratio.replace(':', 'x');
-					const url = await this.storageService.uploadImage(
-						user_id,
-						new_ad_id,
-						ratioKey,
-						img.buffer,
-					);
-					imageUrls[ratioKey] = url;
-				}),
-			);
+			if (result1x1.data) {
+				uploadTasks.push(
+					this.storageService.uploadImage(user_id, new_ad_id, '1x1', Buffer.from(result1x1.data, 'base64'))
+						.then((url) => { imageUrls['1x1'] = url; })
+						.catch((err) => { this.logger.error(`Fix upload 1x1 failed: ${err.message}`); }),
+				);
+			}
+			if (result9x16.data) {
+				uploadTasks.push(
+					this.storageService.uploadImage(user_id, new_ad_id, '9x16', Buffer.from(result9x16.data, 'base64'))
+						.then((url) => { imageUrls['9x16'] = url; })
+						.catch((err) => { this.logger.warn(`Fix upload 9x16 failed: ${err.message}`); }),
+				);
+			}
+			if (result16x9.data) {
+				uploadTasks.push(
+					this.storageService.uploadImage(user_id, new_ad_id, '16x9', Buffer.from(result16x9.data, 'base64'))
+						.then((url) => { imageUrls['16x9'] = url; })
+						.catch((err) => { this.logger.warn(`Fix upload 16x9 failed: ${err.message}`); }),
+				);
+			}
 
-			for (const result of uploadResults) {
-				if (result.status === 'rejected') {
-					this.logger.error(`Upload failed: ${result.reason?.message}`);
-				}
+			await Promise.all(uploadTasks);
+
+			if (Object.keys(imageUrls).length === 0) {
+				throw new Error('All fix-errors image generations failed — no images to save');
 			}
 
 			// 6. Ad copy

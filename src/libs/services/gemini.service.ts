@@ -163,7 +163,7 @@ export class GeminiService {
 
 		const sanitizedPrompt = this.sanitizePromptForImageGeneration(prompt);
 
-		const enhancedPrompt = `Professional commercial advertisement photo. ${sanitizedPrompt}. High quality studio lighting, sharp details, clean background, modern minimal design. CRITICAL: Any human models must be FULLY CLOTHED. Do NOT render any hex codes, color codes, or technical codes as visible text in the image. Render all text EXACTLY as specified with correct spelling.`;
+		const enhancedPrompt = `Professional commercial advertisement photo. ${sanitizedPrompt}. High quality studio lighting, sharp details, clean background, modern minimal design. CRITICAL: Any human models must be FULLY CLOTHED. Do NOT render any hex codes, color codes, or technical codes as visible text in the image. Render all text EXACTLY as specified with correct spelling. CRITICAL: Maintain the exact same color palette across all variations — do not shift or alter brand colors.`;
 
 		const requestId = Math.random().toString(36).substring(2, 8);
 		this.logger.log(`🎨 [${requestId}] ===== IMAGEN START | ${ratioText} | Model: ${this.MODEL} =====`);
@@ -355,6 +355,120 @@ Output a dense, structured description covering every point above. Do not omit a
 			this.logger.error(`Product analysis failed: ${error.message} — falling back to prompt-only generation`);
 			return this.generateImage(prompt, undefined, aspectRatio, resolution, userApiKey);
 		}
+	}
+
+	/**
+	 * Generate image with retry logic — 3 attempts with simplified prompt fallback.
+	 * Returns null data instead of throwing on total failure.
+	 */
+	async generateImageWithRetry(
+		prompt: string,
+		referenceImages: string[],
+		aspectRatio: string,
+		variationLabel: string,
+	): Promise<{ data: string | null; error: string | null }> {
+		const MAX_RETRIES = 3;
+		const strategies = ['original', 'simplified', 'minimal'] as const;
+
+		for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+			try {
+				const currentPrompt = attempt === 0
+					? prompt
+					: this.simplifyPrompt(prompt, strategies[attempt]);
+
+				if (attempt > 0) {
+					this.logger.warn(`Retry ${attempt + 1}/${MAX_RETRIES} for ${variationLabel} using "${strategies[attempt]}" strategy`);
+				}
+
+				const result = await this.generateImageWithReference(
+					currentPrompt,
+					referenceImages,
+					aspectRatio,
+				);
+
+				if (result?.data) {
+					if (attempt > 0) {
+						this.logger.log(`Retry succeeded for ${variationLabel} on attempt ${attempt + 1}`);
+					}
+					return { data: result.data, error: null };
+				}
+
+				throw new GeminiGenerationError(`No data returned for ${variationLabel}`);
+			} catch (error: any) {
+				this.logger.warn(
+					`Generation attempt ${attempt + 1}/${MAX_RETRIES} failed for ${variationLabel}: ${error.message?.substring(0, 200)}`,
+				);
+
+				// Wait before retry (exponential backoff: 1s, 2s, 4s)
+				if (attempt < MAX_RETRIES - 1) {
+					const delay = Math.pow(2, attempt) * 1000;
+					await new Promise((resolve) => setTimeout(resolve, delay));
+				}
+
+				// Content policy errors → skip to simplified strategy immediately
+				if (this.isContentPolicyError(error) && attempt === 0) {
+					this.logger.warn(`Content policy rejection for ${variationLabel} — jumping to simplified strategy`);
+				}
+			}
+		}
+
+		this.logger.error(`All ${MAX_RETRIES} attempts failed for ${variationLabel}`);
+		return {
+			data: null,
+			error: `Image generation failed after ${MAX_RETRIES} attempts. Please retry this variation.`,
+		};
+	}
+
+	/**
+	 * Simplify prompt for retry attempts — reduces complex instructions that may cause failures.
+	 */
+	private simplifyPrompt(originalPrompt: string, strategy: string): string {
+		switch (strategy) {
+			case 'simplified':
+				// Remove complex layout instructions, keep core elements
+				return originalPrompt
+					.replace(/position(ed)?\s+(exactly|precisely)\s+/gi, 'place ')
+					.replace(
+						/floating\s+review\s+cards?\s+arranged\s+in\s+a\s+\w+\s+pattern/gi,
+						'review cards around the product',
+					)
+					.replace(/with\s+subtle\s+drop\s+shadow\s+of\s+\d+px/gi, 'with shadow')
+					.replace(/\d+px\s+(gap|margin|padding|spacing)/gi, 'appropriate spacing')
+					.replace(/\d+%\s+(opacity|transparency)/gi, 'subtle transparency');
+
+			case 'minimal': {
+				// Extract just the essential: product + headline + brand colors
+				const lines = originalPrompt.split('\n');
+				const essentialLines = lines.filter(
+					(line) =>
+						line.toLowerCase().includes('headline') ||
+						line.toLowerCase().includes('product') ||
+						line.toLowerCase().includes('logo') ||
+						line.toLowerCase().includes('background') ||
+						line.toLowerCase().includes('color palette') ||
+						line.toLowerCase().includes('brand color'),
+				);
+				return `Create a clean, professional Facebook ad image.\n${essentialLines.join('\n')}`;
+			}
+
+			default:
+				return originalPrompt;
+		}
+	}
+
+	/**
+	 * Check if an error is a content policy rejection (different handling for retries).
+	 */
+	private isContentPolicyError(error: any): boolean {
+		const message = error?.message?.toLowerCase() || '';
+		return (
+			message.includes('safety') ||
+			message.includes('policy') ||
+			message.includes('blocked') ||
+			message.includes('harm') ||
+			message.includes('violates') ||
+			message.includes('refused')
+		);
 	}
 
 	async generateBatch(prompts: string[], aspectRatio?: string, resolution?: string): Promise<GeminiImageResult[]> {

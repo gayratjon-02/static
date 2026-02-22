@@ -254,8 +254,21 @@ export class BillingService {
         email: string,
         fullName: string,
         adId: string,
+        userTier?: string,
     ): Promise<{ checkout_url: string }> {
         const { stripe_customer_id } = await this.getOrCreateCustomer(userId, email, fullName);
+
+        // Tier-based discounts: Growth 20%, Pro 10%, Starter 0%
+        const basePrice = 490; // $4.90
+        const discountPercent =
+            userTier === 'growth_engine' ? 20 : userTier === 'pro' ? 10 : 0;
+        const finalPrice = discountPercent > 0
+            ? Math.round(basePrice * (1 - discountPercent / 100))
+            : basePrice;
+
+        if (discountPercent > 0) {
+            this.logger.log(`Canva checkout: ${discountPercent}% tier discount applied (${userTier}). Price: $${(finalPrice / 100).toFixed(2)}`);
+        }
 
         let session: Stripe.Checkout.Session;
         try {
@@ -268,13 +281,13 @@ export class BillingService {
                         currency: 'usd',
                         product_data: {
                             name: 'Editable Canva Template',
-                            description: 'A fully editable Canva version of your generated ad.',
+                            description: `A fully editable Canva version of your generated ad.${discountPercent > 0 ? ` (${discountPercent}% ${userTier} discount applied)` : ''}`,
                         },
-                        unit_amount: 490, // $4.90
+                        unit_amount: finalPrice,
                     },
                     quantity: 1,
                 }],
-                metadata: { user_id: userId, addon_type: 'canva_template', ad_id: adId },
+                metadata: { user_id: userId, addon_type: 'canva_template', ad_id: adId, discount_percent: String(discountPercent) },
                 payment_intent_data: {
                     metadata: { user_id: userId, addon_type: 'canva_template', ad_id: adId },
                 },

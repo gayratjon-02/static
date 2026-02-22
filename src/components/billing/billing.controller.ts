@@ -83,6 +83,7 @@ export class BillingController {
             authMember.email,
             authMember.full_name,
             adId,
+            authMember.subscription_tier,
         );
     }
 
