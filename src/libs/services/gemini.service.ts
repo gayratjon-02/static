@@ -143,6 +143,7 @@ export class GeminiService {
 		aspectRatio?: string,
 		_resolution?: string,
 		userApiKey?: string,
+		referenceImageParts?: Array<{ data: string; mimeType: string }>,
 	): Promise<{ images: GeminiImageResult[] }> {
 		const client = this.getClient(userApiKey);
 		const startTime = Date.now();
@@ -156,50 +157,76 @@ export class GeminiService {
 
 		const sanitizedPrompt = this.sanitizePromptForImageGeneration(prompt);
 
-		const enhancedPrompt = `Professional commercial advertisement photo. ${sanitizedPrompt}. High quality studio lighting, sharp details, clean background, modern minimal design. CRITICAL: Any human models must be FULLY CLOTHED. Do NOT render any hex codes, color codes, or technical codes as visible text in the image. Render all text EXACTLY as specified with correct spelling. CRITICAL: Maintain the exact same color palette across all variations — do not shift or alter brand colors.`;
+		// Build reference image instructions if images are provided
+		const refCount = referenceImageParts?.length || 0;
+		const referenceInstructions = refCount > 0 ? [
+			'REFERENCE IMAGES PROVIDED (use them in the ad):',
+			refCount >= 1 ? '- Image 1: PRODUCT IMAGE — this is the actual product. Use this exact product appearance in the ad.' : '',
+			refCount >= 2 ? '- Image 2: BRAND LOGO — use this exact logo in the ad. Render the brand name exactly as shown.' : '',
+			refCount >= 3 ? '- Image 3: CONCEPT REFERENCE — use this as a style/layout reference for the ad design.' : '',
+		].filter(Boolean).join('\n') + '\n\n' : '';
+
+		const aspectInstruction = `Generate this image in ${ratioText} aspect ratio.`;
+
+		const enhancedPrompt = `${referenceInstructions}${aspectInstruction}\n\nProfessional commercial advertisement photo. ${sanitizedPrompt}. High quality studio lighting, sharp details, clean background, modern minimal design. CRITICAL: Any human models must be FULLY CLOTHED. Do NOT render any hex codes, color codes, or technical codes as visible text in the image. Render all text EXACTLY as specified with correct spelling. CRITICAL: Maintain the exact same color palette across all variations — do not shift or alter brand colors.`;
 
 		const requestId = Math.random().toString(36).substring(2, 8);
-		this.logger.log(`🎨 [${requestId}] ===== IMAGEN START | ${ratioText} | Model: ${this.MODEL} =====`);
+		this.logger.log(`🎨 [${requestId}] ===== GEMINI FLASH IMAGE START | ${ratioText} | Model: ${this.MODEL} | Refs: ${refCount} =====`);
 		this.logger.log(`🎨 [${requestId}] Prompt length: ${enhancedPrompt.length} chars`);
 
 		try {
 			this.checkCircuitBreaker();
 
-			const generatePromise = (client.models as any).generateImages({
+			// Build content parts: reference images first, then text prompt
+			const contentParts: any[] = [];
+
+			if (referenceImageParts) {
+				for (const img of referenceImageParts) {
+					contentParts.push({
+						inlineData: {
+							mimeType: img.mimeType,
+							data: img.data,
+						},
+					});
+				}
+			}
+
+			contentParts.push({ text: enhancedPrompt });
+
+			const generatePromise = client.models.generateContent({
 				model: this.MODEL,
-				prompt: enhancedPrompt,
+				contents: contentParts,
 				config: {
-					numberOfImages: 1,
-					aspectRatio: ratioText,
+					responseModalities: ['Text', 'Image'],
+					imageConfig: {
+						aspectRatio: ratioText,
+					},
 				},
 			});
 
-			const response = await this.withTimeout(generatePromise, this.TIMEOUT_MS, 'Imagen image generation');
+			const response = await this.withTimeout(generatePromise, this.TIMEOUT_MS, 'Gemini Flash image generation');
 
 			const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
 			this.logger.log(`✅ [${requestId}] Response received in ${elapsedTime}s | ${ratioText}`);
 
-			const generatedImages = (response as any)?.generatedImages;
-
-			if (!generatedImages || generatedImages.length === 0) {
-				this.logger.error(`❌ [${requestId}] No images returned from Imagen`);
-				throw new GeminiGenerationError('Imagen returned no images');
-			}
-
+			// Parse Gemini generateContent response — look for inlineData in candidates parts
 			const images: GeminiImageResult[] = [];
 
-			for (const generatedImage of generatedImages) {
-				const imageBytes = generatedImage?.image?.imageBytes;
-				const mimeType = generatedImage?.image?.mimeType || 'image/jpeg';
-
-				if (imageBytes) {
-					images.push({ mimeType, data: imageBytes as string });
+			const parts = (response as any)?.candidates?.[0]?.content?.parts;
+			if (parts) {
+				for (const part of parts) {
+					if (part.inlineData) {
+						images.push({
+							mimeType: part.inlineData.mimeType || 'image/png',
+							data: part.inlineData.data,
+						});
+					}
 				}
 			}
 
 			if (images.length === 0) {
-				this.logger.error(`❌ [${requestId}] No image bytes in Imagen response`);
-				throw new GeminiGenerationError('Imagen did not return any image bytes');
+				this.logger.error(`❌ [${requestId}] No images in Gemini Flash response`);
+				throw new GeminiGenerationError('Gemini Flash Image returned no images');
 			}
 
 			const totalSize = images.reduce((sum, img) => sum + (img.data?.length || 0), 0);
@@ -234,11 +261,11 @@ export class GeminiService {
 			} else if (statusCode === 401 || errorMessage.includes('API key') || errorMessage.includes('auth')) {
 				this.logger.error(`🔑 AUTH ERROR — Invalid API key | Status: ${statusCode} | ${errorMessage}`);
 			} else {
-				this.logger.error(`❌ IMAGEN ERROR after ${elapsedTime}s | Status: ${statusCode} | ${errorMessage}`);
+				this.logger.error(`❌ GEMINI FLASH ERROR after ${elapsedTime}s | Status: ${statusCode} | ${errorMessage}`);
 			}
 
 			this.recordFailure(errorMessage);
-			throw new InternalServerErrorException(`Imagen error: ${errorMessage.substring(0, 300)}`);
+			throw new InternalServerErrorException(`Gemini Flash error: ${errorMessage.substring(0, 300)}`);
 		}
 	}
 
@@ -248,9 +275,10 @@ export class GeminiService {
 		aspectRatio?: string,
 		resolution?: string,
 		userApiKey?: string,
+		referenceImageParts?: Array<{ data: string; mimeType: string }>,
 	): Promise<GeminiImageResult> {
 		try {
-			const result = await this.generateImages(prompt, aspectRatio, resolution, userApiKey);
+			const result = await this.generateImages(prompt, aspectRatio, resolution, userApiKey, referenceImageParts);
 
 			if (result.images.length > 0) {
 				return result.images[0];
@@ -272,14 +300,25 @@ export class GeminiService {
 		userApiKey?: string,
 		productDescription?: string,
 	): Promise<GeminiImageResult> {
-		// If Claude pre-analyzed the images, enrich the prompt directly
-		if (productDescription) {
-			const enrichedPrompt = `${prompt}\n\n[PRODUCT VISUAL REFERENCE — render the product EXACTLY as described below, do NOT generate a different-looking product]: ${productDescription}`;
-			return this.generateImage(enrichedPrompt, undefined, aspectRatio, resolution, userApiKey);
+		// Download reference images as base64 for Gemini Flash Image input
+		const imageParts: Array<{ data: string; mimeType: string }> = [];
+		for (const url of (referenceImages || [])) {
+			if (!url) continue;
+			try {
+				const { base64, mimeType } = await this.downloadImageAsBase64(url);
+				imageParts.push({ data: base64, mimeType });
+			} catch (err: any) {
+				this.logger.warn(`Failed to download reference image: ${url.substring(0, 80)} — ${err.message}`);
+			}
 		}
 
-		// No analysis available — generate with prompt only
-		return this.generateImage(prompt, undefined, aspectRatio, resolution, userApiKey);
+		// If Claude pre-analyzed the images, enrich the prompt
+		let enrichedPrompt = prompt;
+		if (productDescription) {
+			enrichedPrompt = `${prompt}\n\n[PRODUCT VISUAL REFERENCE — render the product EXACTLY as described below, do NOT generate a different-looking product]: ${productDescription}`;
+		}
+
+		return this.generateImage(enrichedPrompt, undefined, aspectRatio, resolution, userApiKey, imageParts.length > 0 ? imageParts : undefined);
 	}
 
 	/**
@@ -519,6 +558,31 @@ export class GeminiService {
 		if (brightness > 180) return `light ${dominantColor}`;
 		if (brightness < 80) return `dark ${dominantColor}`;
 		return dominantColor;
+	}
+
+	/**
+	 * Download image from URL as base64 (for Gemini Flash Image inlineData input).
+	 */
+	private async downloadImageAsBase64(url: string): Promise<{ base64: string; mimeType: string }> {
+		const response = await fetch(url);
+		if (!response.ok) throw new Error(`Image download failed: ${response.status}`);
+		const buffer = await response.arrayBuffer();
+		const base64 = Buffer.from(buffer).toString('base64');
+		const contentType = response.headers.get('content-type') || '';
+		const mimeType = this.detectMediaType(base64, contentType);
+		return { base64, mimeType };
+	}
+
+	private detectMediaType(base64Data: string, contentTypeHeader?: string): string {
+		const header = base64Data.substring(0, 20);
+		if (header.startsWith('/9j/')) return 'image/jpeg';
+		if (header.startsWith('iVBOR')) return 'image/png';
+		if (header.startsWith('UklGR')) return 'image/webp';
+		if (header.startsWith('R0lGO')) return 'image/gif';
+		if (contentTypeHeader && contentTypeHeader.startsWith('image/')) {
+			return contentTypeHeader.split(';')[0].trim();
+		}
+		return 'image/jpeg';
 	}
 
 	private getClient(userApiKey?: string): GoogleGenAI {
