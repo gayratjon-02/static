@@ -282,6 +282,98 @@ Return valid JSON only.`;
 	}
 
 	/**
+	 * Analyze product/reference images using Claude Vision.
+	 * Returns a detailed text description for Imagen prompt enrichment.
+	 */
+	async analyzeProductImages(imageUrls: string[]): Promise<string> {
+		const validUrls = (imageUrls || []).filter((u) => u && u.trim());
+		if (validUrls.length === 0) return '';
+
+		const imageBlocks: any[] = [];
+		for (const url of validUrls) {
+			try {
+				const base64 = await this.downloadImageAsBase64(url);
+				imageBlocks.push({
+					type: 'image',
+					source: {
+						type: 'base64',
+						media_type: 'image/png',
+						data: base64,
+					},
+				});
+			} catch (err) {
+				this.logger.warn(`Failed to download image for analysis: ${url}`);
+			}
+		}
+
+		if (imageBlocks.length === 0) return '';
+
+		const analysisPrompt = `You are a professional product photographer and designer analyzing a product image to create a pixel-perfect visual description for advertisement generation. Be EXTREMELY precise and exhaustive.
+
+Analyze and describe ALL of the following:
+
+SHAPE & STRUCTURE:
+- Overall form (geometric shape, silhouette, outline)
+- Exact proportions (width:height:depth ratios, if estimable)
+- All structural components, parts, segments, and how they connect
+- Edges (sharp, rounded, beveled), curves, angles
+- Surface topology (flat, convex, concave, ridged, embossed)
+
+COLORS (be exact — use descriptive names, NEVER hex codes):
+- Primary color(s) with specific shade names (e.g. "matte charcoal grey", "warm ivory white", "electric teal")
+- Secondary and accent colors and exactly where they appear
+- Gradient, ombre, or color transition areas
+- Metallic, iridescent, or special finish colors
+- IMPORTANT: Describe all colors by name only — do NOT use hex codes like #FFFFFF or #000000
+
+MATERIALS & FINISH:
+- Material type for each part (plastic, rubber, metal, fabric, glass, silicone, etc.)
+- Surface finish (matte, semi-matte, glossy, satin, brushed metal, textured rubber, soft-touch)
+- Transparency or opacity of each component
+- Any reflective or shiny areas
+
+BRANDING & TEXT:
+- Logo: exact position, size relative to product, color, font style
+- Any text or labels on product: exact wording, font style, size, color, placement
+- Symbols, icons, patterns, engravings, or embossed text
+
+FINE DETAILS:
+- Buttons, switches, ports, seams, stitching, joints
+- Patterns or textures on surface (knurling, mesh, weave, grain)
+- Any accessories, attachments, or separate components shown
+- Packaging elements if visible (box, wrapper, label)
+
+SCALE & CONTEXT:
+- Estimated real-world size (small handheld / medium / large)
+- Any scale reference visible (hand, table, common object)
+- Product orientation in image (front view, side, angle, flat lay)
+
+Output a dense, structured description covering every point above. Do not omit anything visible. This will be used to recreate the product in a photorealistic advertisement.`;
+
+		const messageContent = [
+			...imageBlocks,
+			{ type: 'text', text: analysisPrompt },
+		];
+
+		try {
+			const response = await this.client.messages.create({
+				model: 'claude-sonnet-4-5-20250929',
+				max_tokens: 2000,
+				messages: [{ role: 'user', content: messageContent }],
+			});
+
+			const textBlock = response.content.find((b) => b.type === 'text');
+			const description = textBlock && textBlock.type === 'text' ? textBlock.text : '';
+
+			this.logger.log(`🔍 Claude product analysis done (${description.length} chars) — usage: ${response.usage.input_tokens} input, ${response.usage.output_tokens} output tokens`);
+			return description;
+		} catch (error: any) {
+			this.logger.error(`Claude product analysis failed: ${error.message}`);
+			return '';
+		}
+	}
+
+	/**
 	 * Download image from URL as base64 string (for Claude vision).
 	 */
 	private async downloadImageAsBase64(url: string): Promise<string> {

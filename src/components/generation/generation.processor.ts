@@ -142,11 +142,21 @@ export class GenerationProcessor extends WorkerHost {
 			const referenceImages = [product.photo_url, brand.logo_url, concept.image_url].filter(Boolean);
 			this.logger.log(`Sending ${referenceImages.length} reference images to Gemini (product: ${!!product.photo_url}, logo: ${!!brand.logo_url}, concept: ${!!concept.image_url})`);
 
+			// Analyze product images with Claude Vision (once, shared across all 3 ratios)
+			let productDescription = '';
+			if (referenceImages.length > 0) {
+				try {
+					productDescription = await this.claudeService.analyzeProductImages(referenceImages);
+				} catch (err) {
+					this.logger.warn(`Product image analysis failed: ${err.message} — proceeding without analysis`);
+				}
+			}
+
 			// Generate all 3 ratios in parallel with retry logic (3 attempts each)
 			const [result1x1, result9x16, result16x9] = await Promise.all([
-				this.geminiService.generateImageWithRetry(prompt1x1, referenceImages, '1:1', `${generated_ad_id}/1:1`),
-				this.geminiService.generateImageWithRetry(prompt9x16, referenceImages, '9:16', `${generated_ad_id}/9:16`),
-				this.geminiService.generateImageWithRetry(prompt16x9, referenceImages, '16:9', `${generated_ad_id}/16:9`),
+				this.geminiService.generateImageWithRetry(prompt1x1, referenceImages, '1:1', `${generated_ad_id}/1:1`, productDescription),
+				this.geminiService.generateImageWithRetry(prompt9x16, referenceImages, '9:16', `${generated_ad_id}/9:16`, productDescription),
+				this.geminiService.generateImageWithRetry(prompt16x9, referenceImages, '16:9', `${generated_ad_id}/16:9`, productDescription),
 			]);
 
 			// 6. Upload all successful results in parallel
@@ -395,6 +405,16 @@ export class GenerationProcessor extends WorkerHost {
 			].filter(Boolean);
 			this.logger.log(`Fix-errors: sending ${referenceImages.length} reference images to Gemini`);
 
+			// Analyze product images with Claude Vision
+			let productDescription = '';
+			if (referenceImages.length > 0) {
+				try {
+					productDescription = await this.claudeService.analyzeProductImages(referenceImages);
+				} catch (err) {
+					this.logger.warn(`Fix-errors image analysis failed: ${err.message} — proceeding without analysis`);
+				}
+			}
+
 			// Build brand color description for prompts
 			const brandColorDesc = this.buildBrandColorDescription(brandSnapshot as Brand);
 			const basePrompt = validation.cleanedPrompt;
@@ -403,15 +423,15 @@ export class GenerationProcessor extends WorkerHost {
 			const [result1x1, result9x16, result16x9] = await Promise.all([
 				this.geminiService.generateImageWithRetry(
 					`${basePrompt}\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`,
-					referenceImages, '1:1', `fix-${new_ad_id}/1:1`,
+					referenceImages, '1:1', `fix-${new_ad_id}/1:1`, productDescription,
 				),
 				this.geminiService.generateImageWithRetry(
 					`${basePrompt}\nCRITICAL: MAINTAIN IDENTICAL colors.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`,
-					referenceImages, '9:16', `fix-${new_ad_id}/9:16`,
+					referenceImages, '9:16', `fix-${new_ad_id}/9:16`, productDescription,
 				),
 				this.geminiService.generateImageWithRetry(
 					`${basePrompt}\nCRITICAL: MAINTAIN IDENTICAL colors.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`,
-					referenceImages, '16:9', `fix-${new_ad_id}/16:9`,
+					referenceImages, '16:9', `fix-${new_ad_id}/16:9`, productDescription,
 				),
 			]);
 

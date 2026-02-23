@@ -1,14 +1,8 @@
-import { Injectable, InternalServerErrorException, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenAI } from '@google/genai';
-import { AIMessage, FileMessage } from '../enums/brand/brand.enum'; // Updated path based on previous step
-import { GEMINI_MODEL, GeminiImageResult } from '../config'; // Updated path
-import { AnalyzedProductJSON } from '../../common/interfaces/product-json.interface'; // Updated path
-import { AnalyzedDAJSON } from '../../common/interfaces/da-json.interface'; // Updated path
-import { PRODUCT_ANALYSIS_PROMPT } from './prompts/product-analysis.prompt';
-import { DA_ANALYSIS_PROMPT } from './prompts/da-analysis.prompt';
-import * as fs from 'fs';
-import * as path from 'path';
+import { AIMessage } from '../enums/brand/brand.enum';
+import { GEMINI_MODEL, GeminiImageResult } from '../config';
 
 export interface GeneratedImage {
 	ratio: string;
@@ -36,7 +30,6 @@ export class GeminiService {
 	private readonly logger = new Logger(GeminiService.name);
 
 	private readonly MODEL = GEMINI_MODEL;
-	private readonly ANALYSIS_MODEL = 'gemini-2.5-flash-preview-04-17';
 
 	private readonly TIMEOUT_MS = 180 * 1000;
 
@@ -277,84 +270,16 @@ export class GeminiService {
 		aspectRatio?: string,
 		resolution?: string,
 		userApiKey?: string,
+		productDescription?: string,
 	): Promise<GeminiImageResult> {
-		const validImages = (referenceImages || []).filter((img) => img && img.trim() !== '');
-
-		if (validImages.length === 0) {
-			return this.generateImage(prompt, undefined, aspectRatio, resolution, userApiKey);
-		}
-
-		try {
-			// Step 1: Use Gemini Vision to analyze product images and get detailed visual description
-			const client = this.getClient(userApiKey);
-			const imageParts = await this.buildImageParts(validImages);
-
-			const analysisPrompt = `You are a professional product photographer and designer analyzing a product image to create a pixel-perfect visual description for advertisement generation. Be EXTREMELY precise and exhaustive.
-
-Analyze and describe ALL of the following:
-
-SHAPE & STRUCTURE:
-- Overall form (geometric shape, silhouette, outline)
-- Exact proportions (width:height:depth ratios, if estimable)
-- All structural components, parts, segments, and how they connect
-- Edges (sharp, rounded, beveled), curves, angles
-- Surface topology (flat, convex, concave, ridged, embossed)
-
-COLORS (be exact — use descriptive names, NEVER hex codes):
-- Primary color(s) with specific shade names (e.g. "matte charcoal grey", "warm ivory white", "electric teal")
-- Secondary and accent colors and exactly where they appear
-- Gradient, ombre, or color transition areas
-- Metallic, iridescent, or special finish colors
-- IMPORTANT: Describe all colors by name only — do NOT use hex codes like #FFFFFF or #000000
-
-MATERIALS & FINISH:
-- Material type for each part (plastic, rubber, metal, fabric, glass, silicone, etc.)
-- Surface finish (matte, semi-matte, glossy, satin, brushed metal, textured rubber, soft-touch)
-- Transparency or opacity of each component
-- Any reflective or shiny areas
-
-BRANDING & TEXT:
-- Logo: exact position, size relative to product, color, font style
-- Any text or labels on product: exact wording, font style, size, color, placement
-- Symbols, icons, patterns, engravings, or embossed text
-
-FINE DETAILS:
-- Buttons, switches, ports, seams, stitching, joints
-- Patterns or textures on surface (knurling, mesh, weave, grain)
-- Any accessories, attachments, or separate components shown
-- Packaging elements if visible (box, wrapper, label)
-
-SCALE & CONTEXT:
-- Estimated real-world size (small handheld / medium / large)
-- Any scale reference visible (hand, table, common object)
-- Product orientation in image (front view, side, angle, flat lay)
-
-Output a dense, structured description covering every point above. Do not omit anything visible. This will be used to recreate the product in a photorealistic advertisement.`;
-
-			const analysisResponse = await client.models.generateContent({
-				model: this.ANALYSIS_MODEL,
-				contents: [{ role: 'user', parts: [{ text: analysisPrompt }, ...imageParts] }],
-			});
-
-			const productDescription = (analysisResponse.candidates?.[0]?.content?.parts || [])
-				.filter((p: any) => p.text)
-				.map((p: any) => p.text)
-				.join('');
-
-			if (productDescription) {
-				this.logger.log(`🔍 Product analysis done (${productDescription.length} chars) — feeding into Imagen`);
-			}
-
-			// Step 2: Pass the detailed product description into the Imagen prompt
-			const enrichedPrompt = productDescription
-				? `${prompt}\n\n[PRODUCT VISUAL REFERENCE — render the product EXACTLY as described below, do NOT generate a different-looking product]: ${productDescription}`
-				: prompt;
-
+		// If Claude pre-analyzed the images, enrich the prompt directly
+		if (productDescription) {
+			const enrichedPrompt = `${prompt}\n\n[PRODUCT VISUAL REFERENCE — render the product EXACTLY as described below, do NOT generate a different-looking product]: ${productDescription}`;
 			return this.generateImage(enrichedPrompt, undefined, aspectRatio, resolution, userApiKey);
-		} catch (error: any) {
-			this.logger.error(`Product analysis failed: ${error.message} — falling back to prompt-only generation`);
-			return this.generateImage(prompt, undefined, aspectRatio, resolution, userApiKey);
 		}
+
+		// No analysis available — generate with prompt only
+		return this.generateImage(prompt, undefined, aspectRatio, resolution, userApiKey);
 	}
 
 	/**
@@ -366,6 +291,7 @@ Output a dense, structured description covering every point above. Do not omit a
 		referenceImages: string[],
 		aspectRatio: string,
 		variationLabel: string,
+		productDescription?: string,
 	): Promise<{ data: string | null; error: string | null }> {
 		const MAX_RETRIES = 3;
 		const strategies = ['original', 'simplified', 'minimal'] as const;
@@ -384,6 +310,9 @@ Output a dense, structured description covering every point above. Do not omit a
 					currentPrompt,
 					referenceImages,
 					aspectRatio,
+					undefined,
+					undefined,
+					productDescription,
 				);
 
 				if (result?.data) {
@@ -590,144 +519,6 @@ Output a dense, structured description covering every point above. Do not omit a
 		if (brightness > 180) return `light ${dominantColor}`;
 		if (brightness < 80) return `dark ${dominantColor}`;
 		return dominantColor;
-	}
-
-	async analyzeProduct(input: { images: string[]; productName?: string }): Promise<AnalyzedProductJSON> {
-		if (!input.images || input.images.length === 0) {
-			throw new BadRequestException(FileMessage.FILE_NOT_FOUND);
-		}
-
-		const client = this.getClient();
-		let promptText = PRODUCT_ANALYSIS_PROMPT;
-		if (input.productName) {
-			promptText += `\n\nProduct name: ${input.productName}`;
-		}
-
-		const imageParts = await this.buildImageParts(input.images);
-
-		try {
-			const response = await client.models.generateContent({
-				model: this.ANALYSIS_MODEL,
-				contents: [
-					{
-						role: 'user',
-						parts: [{ text: promptText }, ...imageParts],
-					},
-				],
-			});
-
-			const candidate = response.candidates?.[0];
-			if (!candidate || !candidate.content?.parts) {
-				throw new InternalServerErrorException('No response from Gemini');
-			}
-
-			let textResponse = '';
-			for (const part of candidate.content.parts) {
-				if ((part as any).text) {
-					textResponse += (part as any).text;
-				}
-			}
-
-			const parsed = this.parseJson(textResponse);
-			if (!parsed) throw new InternalServerErrorException('Failed to parse product analysis');
-
-			return {
-				...parsed,
-				analyzed_at: new Date().toISOString(),
-			};
-		} catch (error: any) {
-			throw new InternalServerErrorException(`Gemini analysis error: ${error.message}`);
-		}
-	}
-
-	private async buildImageParts(images: string[]): Promise<any[]> {
-		const parts: any[] = [];
-
-		for (const image of images) {
-			try {
-				let base64Data: string;
-				let mimeType = 'image/jpeg';
-
-				if (image.startsWith('http://') || image.startsWith('https://')) {
-					const response = await fetch(image);
-					if (!response.ok) continue;
-					const buffer = Buffer.from(await response.arrayBuffer());
-					base64Data = buffer.toString('base64');
-					mimeType = response.headers.get('content-type') || 'image/jpeg';
-				} else if (image.startsWith('data:')) {
-					const matches = image.match(/^data:([^;]+);base64,(.+)$/);
-					if (matches) {
-						mimeType = matches[1];
-						base64Data = matches[2];
-					} else continue;
-				} else {
-					if (!fs.existsSync(image)) continue;
-					const buffer = fs.readFileSync(image);
-					base64Data = buffer.toString('base64');
-					if (image.endsWith('.png')) mimeType = 'image/png';
-				}
-
-				parts.push({
-					inlineData: {
-						mimeType,
-						data: base64Data,
-					},
-				});
-			} catch (error) {
-				this.logger.error(`Failed to load image part: ${image}`);
-			}
-		}
-
-		if (parts.length === 0) {
-			throw new BadRequestException('No valid images could be loaded');
-		}
-
-		return parts;
-	}
-
-	private parseJson(text: string): any {
-		if (!text) return null;
-		try {
-			return JSON.parse(text);
-		} catch {
-			const jsonMatch = text.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
-			return jsonMatch ? JSON.parse(jsonMatch[1]) : null;
-		}
-	}
-
-	async analyzeDAReference(imageUrl: string): Promise<AnalyzedDAJSON> {
-		const client = this.getClient();
-		const parts = await this.buildImageParts([imageUrl]);
-
-		try {
-			const response = await client.models.generateContent({
-				model: this.ANALYSIS_MODEL,
-				contents: [
-					{
-						role: 'user',
-						parts: [{ text: DA_ANALYSIS_PROMPT }, ...parts],
-					},
-				],
-			});
-
-			const candidate = response.candidates?.[0];
-			let textResponse = '';
-			if (candidate?.content?.parts) {
-				for (const part of candidate.content.parts) {
-					if ((part as any).text) textResponse += (part as any).text;
-				}
-			}
-
-			const parsed = this.parseJson(textResponse);
-			if (!parsed) throw new InternalServerErrorException('Failed to parse DA analysis');
-
-			return {
-				...parsed,
-				analyzed_at: new Date().toISOString(),
-			};
-		} catch (error: any) {
-			throw new InternalServerErrorException(`Gemini DA analysis error: ${error.message}`);
-		}
 	}
 
 	private getClient(userApiKey?: string): GoogleGenAI {
