@@ -155,8 +155,8 @@ export class GenerationProcessor extends WorkerHost {
 				claudeResponse.callout_texts = claudeResponse.callout_texts.map(
 					(t: string) => this.promptValidator.simplifyDifficultWords(t),
 				);
-				// ✅ Enforce strict 5-word limit on review cards (prevents garbled trailing words)
-				claudeResponse.callout_texts = this.promptValidator.enforceWordLimit(claudeResponse.callout_texts, 5);
+				// ✅ Enforce strict 4-word limit on review cards (prevents garbled trailing words)
+				claudeResponse.callout_texts = this.promptValidator.enforceWordLimit(claudeResponse.callout_texts, 4);
 				// ✅ Validate badge text — shorten 3+ word badges to 2 words (prevents merged badges like "60 Time Setup")
 				claudeResponse.callout_texts = this.promptValidator.validateBadgeText(claudeResponse.callout_texts);
 			}
@@ -390,7 +390,14 @@ export class GenerationProcessor extends WorkerHost {
 	 */
 	private buildTextRenderingSpec(claudeResponse: ClaudeResponseJson): string {
 		const lines: string[] = [
-			'═══ TEXT RENDERING REQUIREMENTS ═══',
+			'═══ CONCEPT IMAGE TEXT BLOCKER ═══',
+			'The concept reference image contains text for a DIFFERENT product/brand.',
+			'DO NOT reproduce ANY text you see in the concept reference image.',
+			'If you see review cards, brand names, product names, or slogans in the concept image — IGNORE ALL OF THEM.',
+			'ONLY render the text explicitly listed below in the PERMITTED TEXTS section.',
+			'Any text not listed below is FORBIDDEN and must NOT appear in the image.',
+			'',
+			'===== PERMITTED TEXTS (render ONLY these) =====',
 			'Copy these strings EXACTLY, character by character. Do NOT paraphrase, abbreviate, or re-spell any word.',
 			'NEVER render the same word twice in a row (e.g. "both both" is WRONG).',
 			'',
@@ -410,6 +417,10 @@ export class GenerationProcessor extends WorkerHost {
 		}
 		if (claudeResponse.callout_texts?.length > 0) {
 			const count = claudeResponse.callout_texts.length;
+			// Get hardcoded reviewer names for review-length callouts
+			const reviewerNames = this.promptValidator.getReviewerNames(count);
+			let reviewNameIdx = 0;
+
 			lines.push(`TEXT ELEMENTS: Render EXACTLY ${count} elements — not more, not less.`);
 			lines.push(`Each element is INDEPENDENT — do NOT merge or combine text from different elements.`);
 			lines.push(`Each element must have DIFFERENT text. Do NOT duplicate any element.`);
@@ -422,19 +433,24 @@ export class GenerationProcessor extends WorkerHost {
 					lines.push(`Type: BADGE (small icon)`);
 					lines.push(`Text: "${callout}"`);
 					lines.push(`RULES: Render ONLY these ${wc} word(s). Do NOT add words from other badges.`);
-				} else if (wc > 6) {
-					const splitLines = this.splitIntoRenderLines(callout, 5);
-					lines.push(`Type: REVIEW CARD (${wc} words, render on ${splitLines.length} lines)`);
-					splitLines.forEach((line, j) => {
-						lines.push(`  Line ${j + 1}: "${line}"`);
-					});
 				} else {
-					lines.push(`Type: CALLOUT (${wc} words)`);
+					// Review card or callout — attach a hardcoded reviewer name
+					const name = reviewerNames[reviewNameIdx % reviewerNames.length];
+					reviewNameIdx++;
+					lines.push(`Type: REVIEW CARD (${wc} words)`);
 					lines.push(`Text: "${callout}"`);
+					lines.push(`Reviewer: "${name}" — spell this name EXACTLY as shown`);
+					lines.push(`RULES: Render ONLY this text and name. Do NOT copy text from the concept image.`);
 				}
 				lines.push(`--- ELEMENT ${i + 1} of ${count} END ---`);
 				lines.push('');
 			});
+
+			lines.push('REVIEWER NAMES — use ONLY these names (short, common, easy to spell):');
+			const usedNames = reviewerNames.slice(0, reviewNameIdx);
+			usedNames.forEach(n => lines.push(`  "${n}" — spell exactly as shown`));
+			lines.push('Do NOT invent or modify any reviewer name. Do NOT use names from the concept image.');
+			lines.push('');
 		}
 
 		// Collect spelling hints for all text fields (words 7+ characters)
@@ -449,7 +465,9 @@ export class GenerationProcessor extends WorkerHost {
 			lines.push(spellingHints);
 		}
 
+		lines.push('===== END OF PERMITTED TEXTS =====');
 		lines.push('');
+		lines.push('Any text not listed above is FORBIDDEN. Do not add, invent, or copy text from any reference image.');
 		lines.push('CRITICAL: Every text element above MUST be spelled EXACTLY as shown in the quotes.');
 		lines.push('Word counts are provided — the rendered text must have EXACTLY that many words, no more, no fewer.');
 		lines.push('If you cannot render a word correctly, OMIT the word entirely rather than misspell it.');
@@ -601,7 +619,7 @@ export class GenerationProcessor extends WorkerHost {
 				claudeResponse.callout_texts = claudeResponse.callout_texts.map(
 					(t: string) => this.promptValidator.simplifyDifficultWords(t),
 				);
-				claudeResponse.callout_texts = this.promptValidator.enforceWordLimit(claudeResponse.callout_texts, 5);
+				claudeResponse.callout_texts = this.promptValidator.enforceWordLimit(claudeResponse.callout_texts, 4);
 				claudeResponse.callout_texts = this.promptValidator.validateBadgeText(claudeResponse.callout_texts);
 			}
 			let cleanedPromptFix = this.promptValidator.simplifyDifficultWords(validation.cleanedPrompt);

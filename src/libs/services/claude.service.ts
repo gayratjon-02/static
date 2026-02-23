@@ -467,22 +467,26 @@ RULE 2: SPELL-CHECK ALL TEXT OBSESSIVELY
 
 RULE 3: EVERY REVIEW/TESTIMONIAL MUST BE UNIQUE
 - NEVER repeat the same quote twice in one ad
-- NEVER use generic "Dog owner, 67" format for all reviews
-- Each review must have: unique quote text, unique reviewer name, unique detail
+- Each callout_texts entry must be ONLY the review text (3-4 words). Do NOT include reviewer names.
+  Reviewer names will be assigned automatically by the system.
 - REVIEW TOPIC VARIETY — each review MUST cover a DIFFERENT benefit or angle:
-  * Review 1: one specific benefit (e.g., speed of results)
-  * Review 2: a DIFFERENT benefit (e.g., ease of use)
-  * Review 3: a DIFFERENT angle (e.g., emotional impact)
-  * Review 4: a DIFFERENT angle (e.g., value for money)
-  * Review 5: a DIFFERENT angle (e.g., recommendation to others)
+  * ANXIETY: general relief ("No more stress")
+  * SLEEP: nighttime ("Sleeps all night")
+  * STORMS: storm/noise relief ("Storm fear gone")
+  * EASE: ease of use ("Easy plug forget")
+  * MULTI: multi-pet household ("Both dogs calm")
+  * VET: vet endorsement ("Vet approved this")
+  * SPEED: fast results ("Works in days")
+  * GUESTS: visitor behavior ("Calm with guests")
+  Pick a different topic for each review. Do NOT assign two reviews to the same topic.
 - Do NOT write reviews that say the same thing in different words
-- If the ad has N review cards, you MUST provide EXACTLY N unique callout_texts — no more, no fewer
-- Example of 5 UNIQUE reviews:
-  * "My dog stopped barking at thunder!" — Sarah M., Golden Retriever owner
-  * "Noticed a difference within 24 hours" — James K., verified buyer
-  * "Wish I found this sooner" — Lisa R., anxious puppy mom
-  * "Our vet recommended this exact product" — Mike D., 2 dogs
-  * "Night and day difference in our home" — Emma T., rescue dog parent
+- If the ad has N review cards, you MUST provide EXACTLY N unique callout_texts
+- Example callout_texts (text only, NO names):
+  * "No more barking"
+  * "Sleeps all night"
+  * "Storm fear gone"
+  * "Both dogs calm"
+  * "Works in days"
 
 RULE 4: PRODUCT PHOTO HANDLING
 - The user's actual product photo will be provided to Gemini as a reference image
@@ -508,19 +512,21 @@ When the brand has specific colors, ALWAYS convert to descriptive names:
 RULE 7: KEEP TEXT SHORT — SHORTER TEXT = FEWER SPELLING ERRORS IN IMAGES
 - Headlines: MAX 6 words. Use simple, everyday English words.
 - Subheadlines: MAX 10 words.
-- Callout texts / review cards: MAXIMUM 5 words each. This is a HARD LIMIT, not a suggestion.
-  Count the words before finalizing each review/callout.
-  GOOD (5 words or fewer):
-    "No more anxiety barking" (4 words)
-    "Sleeps through storms now" (4 words)
-    "Easy plug and play" (4 words)
-    "Finally peaceful nights" (3 words)
-  BAD (too many words — WILL cause garbled rendering):
-    "Easy to use daily for my dogs" (8 words — TOO LONG)
-    "My dog sleeps through the night now" (8 words — TOO LONG)
-  If a review needs more than 5 words, shorten it:
-    "My dog finally sleeps through the night" → "Finally sleeps all night" (4 words)
-    "No more embarrassing barking at guests" → "No more guest barking" (4 words)
+- Callout texts / review cards: ABSOLUTE MAXIMUM 4 WORDS per card. This is a HARD LIMIT.
+  Count the words before finalizing each review/callout. 5+ words WILL cause garbled rendering.
+  PERFECT examples (3-4 words):
+    "No more barking" (3 words)
+    "Sleeps through storms" (3 words)
+    "Both dogs calm" (3 words)
+    "Vet approved this" (3 words)
+    "Storm fear gone" (3 words)
+    "Works really fast" (3 words)
+    "Best product ever" (3 words)
+  FORBIDDEN — too long (WILL cause rendering errors):
+    "Two dogs both work great" (5 words — TOO LONG)
+    "My vet approved this product" (5 words — TOO LONG)
+    "Easy daily use for my dog" (6 words — TOO LONG)
+  Every review MUST be 3-4 words. No exceptions.
 - FEATURE BADGES (small circular icons): MAXIMUM 2 words each.
   Badges have very limited space — more than 2 words causes text to merge with neighboring badges.
   GOOD badge text: "60 Days", "Vet Approved", "Easy Setup", "All Breeds", "No Mess", "Safe Daily"
@@ -530,10 +536,28 @@ RULE 7: KEEP TEXT SHORT — SHORTER TEXT = FEWER SPELLING ERRORS IN IMAGES
     "Works For All Breeds" → "All Breeds"
     "Safe For Daily Use" → "Safe Daily"
 - CTA button: MAX 3 words (e.g. "Shop Now", "Try Free", "Get Yours").
-- ALWAYS prefer simple, commonly-spelled English words.
-- AVOID words with double letters that AI struggles to spell: "effortless" → "easy", "professional" → "expert", "recommended" → "approved", "comfortable" → "cozy", "immediately" → "fast", "aggressive" → "intense"
-- GOOD words: "Natural", "Proven", "Fast Relief", "Lab Tested", "Pure", "Safe"
-- BAD words: "Pharmaceutical", "Anxiolytic", "Dermatologically", "Pheromones", "Effortless", "Immediately"
+
+WORD CHOICE — USE SIMPLE WORDS ONLY:
+The text will be rendered in an AI-generated image. Complex or unusual words WILL be misspelled.
+
+AVOID these words (they WILL be misspelled in image generation):
+- "finally" → use "at last" or just remove it
+- "anxious" / "anxiety" → use "stressed" / "stress"
+- "pheromones" / "pheromone" → use "calming" or "calming scent"
+- "recommended" → use "approved"
+- "comfortable" → use "cozy"
+- "separation" → use "alone"
+- "embarrassing" → use "stressful"
+- "immediately" → use "fast" or "quick"
+- "effortless" → use "easy"
+- "professional" → use "expert"
+- "thunderstorm" → use "storm"
+- "fireworks" → use "loud noise"
+- "veterinarian" → use "vet"
+
+USE short, common English words: calm, sleep, storm, fear, safe, easy, fast, works, dogs, love, night, home, vet, plug, quiet, bark, stop, help, best, great, free, proof, daily, trust
+
+DO NOT generate reviewer names — they will be assigned automatically. Only provide the review text in callout_texts.
 
 RULE 8: NEVER USE PIXEL DIMENSIONS OR CSS VALUES IN gemini_image_prompt
 - NEVER: "font-size: 48px", "margin 20px", "shadow of 115px", "border-radius: 10px"
@@ -607,12 +631,10 @@ ${this.get6VariationsJsonSchema()}`;
 TEXT LENGTH CONSTRAINTS (shorter text = fewer spelling errors in images):
 - headline: MAX 6 words. Use simple, common English words.
 - subheadline: MAX 10 words.
-- callout_texts: Each callout MAX 5 words. Feature badges MAX 2 words each.
+- callout_texts: ABSOLUTE MAX 4 words per card. Feature badges MAX 2 words.
 - cta_text: MAX 3 words (e.g. "Shop Now", "Try Free", "Get Yours").
-- PREFER simple, commonly-spelled English words. AVOID unusual, complex, or technical words.
-- AVOID double-letter words: "effortless" → "easy", "recommended" → "approved", "professional" → "expert"
-- Examples of GOOD callout words: "Natural", "Proven", "Fast Relief", "Lab Tested"
-- Examples of BAD callout words: "Pharmaceutical-Grade", "Anxiolytic", "Dermatologically"
+- USE short, common words: calm, sleep, storm, fear, safe, easy, fast, works, love, night, home, vet, plug, quiet, bark, stop, help, best, great, free, proof, daily, trust
+- AVOID words that get misspelled: "finally" → "at last", "anxious" → "stressed", "pheromones" → "calming", "recommended" → "approved", "effortless" → "easy"
 
 The "variations" array MUST contain exactly 6 objects. Each object represents one unique ad creative variation.`;
 	}
@@ -685,10 +707,10 @@ RULE 6: COLOR DESCRIPTIONS — Always convert hex to descriptive names in the ge
 
 RULE 7: KEEP TEXT SHORT — shorter text = fewer spelling errors in images.
 - Headlines: MAX 6 words, simple common words only.
-- Callouts/review cards: MAXIMUM 5 words each (HARD LIMIT — longer text causes garbled rendering).
-- Feature badges (small icons): MAXIMUM 2 words each — more words cause badges to merge into nonsense.
+- Callouts/review cards: ABSOLUTE MAXIMUM 4 WORDS each (5+ words causes garbled rendering).
+- Feature badges (small icons): MAXIMUM 2 words each — more words cause badges to merge.
 - CTA: MAX 3 words.
-- Avoid words with double letters: use "easy" not "effortless", "expert" not "professional", "approved" not "recommended".
+- Avoid complex/unusual words. Use "easy" not "effortless", "approved" not "recommended", "stress" not "anxiety".
 
 RULE 8: NEVER USE PIXEL DIMENSIONS OR CSS VALUES IN gemini_image_prompt
 - NEVER: "font-size: 48px", "margin 20px", "shadow of 115px", "border-radius: 10px"

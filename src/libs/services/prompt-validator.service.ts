@@ -68,6 +68,10 @@ export class PromptValidatorService {
 			'caliming': 'calming',
 			'pheramone': 'pheromone',
 			'phermone': 'pheromone',
+			'phermones': 'pheromones',
+			'anxieus': 'anxious',
+			'seaason': 'season',
+			'finaly': 'finally',
 		};
 
 		// Fix typos in gemini_image_prompt
@@ -307,6 +311,28 @@ export class PromptValidatorService {
 	}
 
 	/**
+	 * Hardcoded list of short, common, easy-to-spell reviewer names.
+	 * Prevents Gemini from garbling unusual names like "Pnenor E." or "Nnnd T."
+	 */
+	private static readonly REVIEWER_NAMES = [
+		'Sarah M.', 'David K.', 'Lisa R.', 'Mike T.',
+		'Emma L.', 'John P.', 'Amy W.', 'Chris B.',
+		'Kate S.', 'Alex H.', 'Jess N.', 'Ryan D.',
+		'Mia G.', 'Sam F.', 'Zoe C.', 'Ben E.',
+		'Leah J.', 'Noah A.', 'Maya V.', 'Jake R.',
+	];
+
+	/**
+	 * Get shuffled reviewer names for callout cards.
+	 * Returns an array of short, common names matching the callout count.
+	 */
+	getReviewerNames(count: number): string[] {
+		const shuffled = [...PromptValidatorService.REVIEWER_NAMES]
+			.sort(() => Math.random() - 0.5);
+		return shuffled.slice(0, count);
+	}
+
+	/**
 	 * Enforce a strict word limit on review/callout texts.
 	 * Gemini renders 4-5 word phrases accurately; longer text causes garbled trailing words.
 	 */
@@ -328,6 +354,7 @@ export class PromptValidatorService {
 	 */
 	simplifyDifficultWords(text: string): string {
 		const replacements: Record<string, string> = {
+			// Double-letter words (hard to render)
 			'effortless': 'easy',
 			'embarrassing': 'stressful',
 			'aggressive': 'intense',
@@ -346,6 +373,23 @@ export class PromptValidatorService {
 			'addressing': 'fixing',
 			'aggression': 'stress',
 			'irritability': 'tension',
+			// Words that consistently fail in image generation
+			'finally': 'at last',
+			'anxious': 'stressed',
+			'anxiety': 'stress',
+			'pheromones': 'calming scent',
+			'pheromone': 'calming',
+			'separation': 'alone time',
+			'thunderstorm': 'storm',
+			'fireworks': 'loud noise',
+			'behaviorist': 'vet',
+			'veterinarian': 'vet',
+			// Common Gemini misspellings → correct simple words
+			'anxieus': 'stressed',
+			'phermones': 'calming scent',
+			'phermone': 'calming',
+			'seaason': 'season',
+			'finaly': 'at last',
 		};
 
 		let result = text;
