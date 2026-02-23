@@ -161,7 +161,7 @@ export class GenerationService {
 					const { input_tokens, output_tokens } = claudeResult.claude_usage;
 					// Claude Sonnet 4.5: $3/M input + $15/M output tokens
 					const claudeCost = (input_tokens * 3 + output_tokens * 15) / 1_000_000;
-					// Imagen 4.0: ~$0.04 per image — 6 variations × 3 ratios = 18 images max
+					// Imagen 3.0: ~$0.04 per image — 6 variations × 3 ratios = 18 images max
 					const imagenEstimate = 6 * 3 * 0.04;
 					this.logger.log(
 						`💰 Batch ${batchId} cost estimate — Claude: $${claudeCost.toFixed(4)} (${input_tokens}in + ${output_tokens}out tokens) | Imagen: ~$${imagenEstimate.toFixed(2)} | Total: ~$${(claudeCost + imagenEstimate).toFixed(2)}`,
