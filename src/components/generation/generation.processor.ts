@@ -346,38 +346,74 @@ export class GenerationProcessor extends WorkerHost {
 
 	/**
 	 * Build explicit text rendering specification from Claude's ad copy.
-	 * Lists every text string that must appear in the image — Gemini copies these character-by-character.
+	 * Lists every text string with word counts — Gemini copies these character-by-character.
+	 * Includes line-split formatting for longer text to prevent word duplication at line breaks.
 	 */
 	private buildTextRenderingSpec(claudeResponse: ClaudeResponseJson): string {
 		const lines: string[] = [
 			'═══ TEXT RENDERING REQUIREMENTS ═══',
 			'Copy these strings EXACTLY, character by character. Do NOT paraphrase, abbreviate, or re-spell any word.',
+			'NEVER render the same word twice in a row (e.g. "both both" is WRONG).',
 			'',
 		];
 
 		if (claudeResponse.headline) {
-			lines.push(`HEADLINE TEXT: "${claudeResponse.headline}"`);
+			const wc = this.countWords(claudeResponse.headline);
+			lines.push(`HEADLINE TEXT (${wc} words): "${claudeResponse.headline}"`);
 		}
 		if (claudeResponse.subheadline) {
-			lines.push(`SUBHEADLINE TEXT: "${claudeResponse.subheadline}"`);
+			const wc = this.countWords(claudeResponse.subheadline);
+			lines.push(`SUBHEADLINE TEXT (${wc} words): "${claudeResponse.subheadline}"`);
 		}
 		if (claudeResponse.cta_text) {
-			lines.push(`CTA BUTTON TEXT: "${claudeResponse.cta_text}"`);
+			const wc = this.countWords(claudeResponse.cta_text);
+			lines.push(`CTA BUTTON TEXT (${wc} words): "${claudeResponse.cta_text}"`);
 		}
 		if (claudeResponse.callout_texts?.length > 0) {
 			claudeResponse.callout_texts.forEach((callout, i) => {
-				lines.push(`CALLOUT ${i + 1} TEXT: "${callout}"`);
+				const wc = this.countWords(callout);
+				if (wc > 6) {
+					// Long callouts get line-split formatting to prevent duplication
+					const splitLines = this.splitIntoRenderLines(callout, 5);
+					lines.push(`CALLOUT ${i + 1} (${wc} words, render on ${splitLines.length} lines):`);
+					splitLines.forEach((line, j) => {
+						lines.push(`  Line ${j + 1}: "${line}"`);
+					});
+				} else {
+					lines.push(`CALLOUT ${i + 1} TEXT (${wc} words): "${callout}"`);
+				}
 			});
 		}
 
 		lines.push('');
 		lines.push('CRITICAL: Every text element above MUST be spelled EXACTLY as shown in the quotes.');
+		lines.push('Word counts are provided — the rendered text must have EXACTLY that many words, no more, no fewer.');
 		lines.push('If you cannot render a word correctly, OMIT the word entirely rather than misspell it.');
-		lines.push('Double-check each word letter by letter before rendering.');
+		lines.push('NEVER duplicate any word — "both both", "my my", "the the" are WRONG.');
 		lines.push('═══════════════════════════════════');
 		lines.push('');
 
 		return lines.join('\n');
+	}
+
+	/**
+	 * Count words in a text string.
+	 */
+	private countWords(text: string): number {
+		return text.split(/\s+/).filter(w => w.length > 0).length;
+	}
+
+	/**
+	 * Split text into balanced lines for image rendering.
+	 * Prevents word duplication at line breaks by keeping lines short and even.
+	 */
+	private splitIntoRenderLines(text: string, maxWordsPerLine: number = 5): string[] {
+		const words = text.split(/\s+/).filter(w => w.length > 0);
+		const lines: string[] = [];
+		for (let i = 0; i < words.length; i += maxWordsPerLine) {
+			lines.push(words.slice(i, i + maxWordsPerLine).join(' '));
+		}
+		return lines;
 	}
 
 	private async fetchConcept(conceptId: string): Promise<AdConcept> {

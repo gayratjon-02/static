@@ -211,6 +211,7 @@ TEXT LENGTH RULES: Keep all text SHORT — shorter text = fewer spelling errors.
 CRITICAL RULES:
 - NEVER include hex codes in the improved prompt — use color names only
 - NEVER include pixel dimensions (e.g. "48px", "115px", "1080x1080") — use descriptive sizes ("large", "small", "subtle")
+- Keep testimonials SHORT: max 8 words per sentence to prevent word duplication
 - Spell-check every word in corrected copy
 - Reference "provided product photo" and "provided brand logo" — don't describe them
 - Focus the prompt improvements specifically on the identified issues
@@ -515,6 +516,14 @@ RULE 8: NEVER USE PIXEL DIMENSIONS OR CSS VALUES IN gemini_image_prompt
 - For sizes: use "large", "medium", "small", "subtle", "prominent" — NEVER numbers with units
 - For spacing: use "ample whitespace", "tight spacing", "generous margins" — NEVER pixel values
 
+RULE 9: PREVENT WORD DUPLICATION IN TESTIMONIALS
+- Gemini sometimes renders the same word twice at line breaks (e.g. "both both", "my my")
+- To prevent this: keep each testimonial to 1-2 SHORT sentences, max 8 words per sentence
+- Prefer simple sentence structures: Subject + Verb + Object
+- GOOD: "My dog sleeps peacefully now." (5 words, clean)
+- BAD: "I cried the first night my rescue slept peacefully because this diffuser changed everything." (too long, causes duplication)
+- Shorter sentences = fewer line breaks = fewer duplicated words
+
 ═══════════════════════════════════════════════════
 VARIATION REQUIREMENTS
 ═══════════════════════════════════════════════════
@@ -654,6 +663,9 @@ RULE 8: NEVER USE PIXEL DIMENSIONS OR CSS VALUES IN gemini_image_prompt
 - NEVER: "font-size: 48px", "margin 20px", "shadow of 115px", "border-radius: 10px"
 - ALWAYS: Use relative descriptions: "large headline", "subtle shadow", "rounded corners"
 - Gemini renders dimension values as visible text in images
+
+RULE 9: PREVENT WORD DUPLICATION — keep testimonials to max 8 words per sentence.
+- Gemini duplicates words at line breaks: "both both", "my my" — shorter sentences prevent this.
 
 You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
 {
