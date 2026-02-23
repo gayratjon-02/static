@@ -198,13 +198,15 @@ OUTPUT FORMAT
 
 You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
 {
-  "headline": "Short, punchy headline (max 8 words) — corrected and spell-checked",
-  "subheadline": "Supporting text (max 15 words) — corrected",
-  "body_text": "Persuasive body copy (max 30 words)",
-  "callout_texts": ["Callout 1", "Callout 2", "Callout 3"],
-  "cta_text": "Call to action button text",
+  "headline": "Short headline (max 6 words, simple common words) — corrected and spell-checked",
+  "subheadline": "Supporting text (max 10 words) — corrected",
+  "body_text": "Persuasive body copy (max 25 words)",
+  "callout_texts": ["Max 3 words", "Simple words", "Easy to spell"],
+  "cta_text": "CTA (max 3 words)",
   "gemini_image_prompt": "IMPROVED prompt with specific fix instructions. Colors by NAME only — NEVER hex codes."
 }
+
+TEXT LENGTH RULES: Keep all text SHORT — shorter text = fewer spelling errors. Headlines max 6 words, callouts max 3 words each, CTA max 3 words. Use simple common English words only.
 
 CRITICAL RULES:
 - NEVER include hex codes in the improved prompt — use color names only
@@ -493,6 +495,17 @@ When the brand has specific colors, ALWAYS convert to descriptive names:
 - Include a color palette description section:
   "COLOR PALETTE: The ad uses a dark charcoal navy as the primary color, muted slate purple as secondary, and vibrant coral pink for accents and CTAs. Background is pure white for the top section."
 
+RULE 7: KEEP TEXT SHORT — SHORTER TEXT = FEWER SPELLING ERRORS IN IMAGES
+- Headlines: MAX 6 words. Use simple, everyday English words.
+- Subheadlines: MAX 10 words.
+- Callout texts: MAX 3 words each. Single-word or two-word callouts preferred.
+- CTA button: MAX 3 words (e.g. "Shop Now", "Try Free", "Get Yours").
+- Testimonials/reviews: MAX 15 words each.
+- ALWAYS prefer simple, commonly-spelled English words.
+- AVOID complex, technical, or unusual words that AI image generators struggle to spell.
+- GOOD words: "Natural", "Proven", "Fast Relief", "Lab Tested", "Pure", "Safe"
+- BAD words: "Pharmaceutical", "Anxiolytic", "Dermatologically", "Pheromones"
+
 ═══════════════════════════════════════════════════
 VARIATION REQUIREMENTS
 ═══════════════════════════════════════════════════
@@ -528,11 +541,11 @@ ${this.get6VariationsJsonSchema()}`;
 {
   "variations": [
     {
-      "headline": "Short, punchy headline (max 8 words)",
-      "subheadline": "Supporting text (max 15 words)",
-      "body_text": "Persuasive body copy (max 30 words)",
-      "callout_texts": ["array of unique callout strings — badges, features, quotes"],
-      "cta_text": "Call to action button text",
+      "headline": "Short, punchy headline (max 6 words, use simple common words)",
+      "subheadline": "Supporting text (max 10 words)",
+      "body_text": "Persuasive body copy (max 25 words)",
+      "callout_texts": ["Max 3 words each", "Simple common words", "Easy to spell"],
+      "cta_text": "CTA text (max 3 words)",
       "ad_copy_review": {
         "all_text_spell_checked": true,
         "no_hex_codes_in_prompt": true,
@@ -543,6 +556,16 @@ ${this.get6VariationsJsonSchema()}`;
     }
   ]
 }
+
+TEXT LENGTH CONSTRAINTS (shorter text = fewer spelling errors in images):
+- headline: MAX 6 words. Use simple, common English words.
+- subheadline: MAX 10 words.
+- callout_texts: Each callout MAX 3 words. Prefer single-word or two-word callouts.
+- cta_text: MAX 3 words (e.g. "Shop Now", "Try Free", "Get Yours").
+- Testimonials/reviews in callouts: MAX 15 words each.
+- PREFER simple, commonly-spelled English words. AVOID unusual, complex, or technical words that are hard to spell.
+- Examples of GOOD callout words: "Natural", "Proven", "Fast Relief", "Lab Tested"
+- Examples of BAD callout words: "Pharmaceutical-Grade", "Anxiolytic", "Dermatologically"
 
 The "variations" array MUST contain exactly 6 objects. Each object represents one unique ad creative variation.`;
 	}
@@ -567,11 +590,11 @@ The "variations" array MUST contain exactly 6 objects. Each object represents on
 
 You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
 {
-  "headline": "Short, punchy headline (max 8 words)",
-  "subheadline": "Supporting text (max 15 words)",
-  "body_text": "Persuasive body copy (max 30 words)",
-  "callout_texts": ["Callout 1", "Callout 2", "Callout 3"],
-  "cta_text": "Call to action button text",
+  "headline": "Short, punchy headline (max 6 words, simple common words)",
+  "subheadline": "Supporting text (max 10 words)",
+  "body_text": "Persuasive body copy (max 25 words)",
+  "callout_texts": ["Max 3 words each", "Simple words", "Easy to spell"],
+  "cta_text": "CTA (max 3 words)",
   "ad_copy_review": {
     "all_text_spell_checked": true,
     "no_hex_codes_in_prompt": true,
@@ -579,7 +602,9 @@ You MUST respond with valid JSON only, no markdown, no code blocks. The JSON mus
     "product_described_not_generated": true
   },
   "gemini_image_prompt": "The COMPLETE image generation prompt. Colors by NAME only — NEVER hex codes. Reference provided product photo and brand logo."
-}`;
+}
+
+TEXT LENGTH RULES: Headlines max 6 words, callouts max 3 words each, CTA max 3 words. Use simple common English words only.`;
 			}
 		} catch {
 			this.logger.warn('Failed to load prompt from DB, using fallback');
@@ -608,13 +633,19 @@ RULE 5: LOGO — The actual logo will be provided to Gemini. Say "Place the prov
 
 RULE 6: COLOR DESCRIPTIONS — Always convert hex to descriptive names in the gemini_image_prompt.
 
+RULE 7: KEEP TEXT SHORT — shorter text = fewer spelling errors in images.
+- Headlines: MAX 6 words, simple common words only.
+- Callouts: MAX 3 words each.
+- CTA: MAX 3 words.
+- Avoid complex/unusual words that are hard to spell.
+
 You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
 {
-  "headline": "Short, punchy headline (max 8 words)",
-  "subheadline": "Supporting text (max 15 words)",
-  "body_text": "Persuasive body copy (max 30 words)",
-  "callout_texts": ["Callout 1", "Callout 2", "Callout 3"],
-  "cta_text": "Call to action button text",
+  "headline": "Short, punchy headline (max 6 words)",
+  "subheadline": "Supporting text (max 10 words)",
+  "body_text": "Persuasive body copy (max 25 words)",
+  "callout_texts": ["Max 3 words", "Simple words", "Easy to spell"],
+  "cta_text": "CTA (max 3 words)",
   "ad_copy_review": {
     "all_text_spell_checked": true,
     "no_hex_codes_in_prompt": true,

@@ -131,7 +131,8 @@ export class GenerationProcessor extends WorkerHost {
 			// Prepend brand name override — ensures Gemini uses the actual brand,
 			// not any brand name visible in concept reference images
 			const brandOverride = `CRITICAL BRAND NAME REQUIREMENT:\n- The brand name is "${brand.name}" — spell it EXACTLY as shown\n- Display "${brand.name}" as the brand name in the ad\n- If you see a DIFFERENT brand name in any reference image, IGNORE it and use "${brand.name}" instead\n- The brand logo text must read "${brand.name}"\n\n`;
-			const basePrompt = brandOverride + validation.cleanedPrompt;
+			const textSpec = this.buildTextRenderingSpec(claudeResponse);
+			const basePrompt = brandOverride + textSpec + validation.cleanedPrompt;
 
 			// Build brand color description for ratio-specific prompts
 			const brandColorDesc = this.buildBrandColorDescription(brand);
@@ -322,6 +323,42 @@ export class GenerationProcessor extends WorkerHost {
 		return colors.length > 0 ? colors.join(', ') : 'Use professional neutral tones';
 	}
 
+	/**
+	 * Build explicit text rendering specification from Claude's ad copy.
+	 * Lists every text string that must appear in the image — Gemini copies these character-by-character.
+	 */
+	private buildTextRenderingSpec(claudeResponse: ClaudeResponseJson): string {
+		const lines: string[] = [
+			'═══ TEXT RENDERING REQUIREMENTS ═══',
+			'Copy these strings EXACTLY, character by character. Do NOT paraphrase, abbreviate, or re-spell any word.',
+			'',
+		];
+
+		if (claudeResponse.headline) {
+			lines.push(`HEADLINE TEXT: "${claudeResponse.headline}"`);
+		}
+		if (claudeResponse.subheadline) {
+			lines.push(`SUBHEADLINE TEXT: "${claudeResponse.subheadline}"`);
+		}
+		if (claudeResponse.cta_text) {
+			lines.push(`CTA BUTTON TEXT: "${claudeResponse.cta_text}"`);
+		}
+		if (claudeResponse.callout_texts?.length > 0) {
+			claudeResponse.callout_texts.forEach((callout, i) => {
+				lines.push(`CALLOUT ${i + 1} TEXT: "${callout}"`);
+			});
+		}
+
+		lines.push('');
+		lines.push('CRITICAL: Every text element above MUST be spelled EXACTLY as shown in the quotes.');
+		lines.push('If you cannot render a word correctly, OMIT the word entirely rather than misspell it.');
+		lines.push('Double-check each word letter by letter before rendering.');
+		lines.push('═══════════════════════════════════');
+		lines.push('');
+
+		return lines.join('\n');
+	}
+
 	private async fetchConcept(conceptId: string): Promise<AdConcept> {
 		const { data, error } = await this.databaseService.client
 			.from('ad_concepts')
@@ -422,7 +459,8 @@ export class GenerationProcessor extends WorkerHost {
 			const brandColorDesc = this.buildBrandColorDescription(brandSnapshot as Brand);
 			const brandName = (brandSnapshot as any).name || '';
 			const brandOverrideFix = brandName ? `CRITICAL BRAND NAME REQUIREMENT:\n- The brand name is "${brandName}" — spell it EXACTLY\n- If you see a DIFFERENT brand name in any reference image, IGNORE it and use "${brandName}" instead\n\n` : '';
-			const basePrompt = brandOverrideFix + validation.cleanedPrompt;
+			const textSpec = this.buildTextRenderingSpec(claudeResponse);
+			const basePrompt = brandOverrideFix + textSpec + validation.cleanedPrompt;
 
 			// Generate all 3 ratios with retry logic
 			const [result1x1, result9x16, result16x9] = await Promise.all([
