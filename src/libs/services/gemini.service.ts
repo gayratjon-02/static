@@ -187,7 +187,7 @@ export class GeminiService {
 
 		const aspectInstruction = `Generate this image in ${ratioText} aspect ratio.`;
 
-		const enhancedPrompt = `${referenceInstructions}${aspectInstruction}\n\nProfessional commercial advertisement photo. ${sanitizedPrompt}. High quality studio lighting, sharp details, clean background, modern minimal design. CRITICAL: Any human models must be FULLY CLOTHED. Do NOT render any hex codes, color codes, or technical codes as visible text in the image. Render all text EXACTLY as specified with correct spelling. CRITICAL: Maintain the exact same color palette across all variations — do not shift or alter brand colors.\n\n═══ FINAL REMINDER — TEXT ACCURACY ═══\nBefore generating the image, verify EVERY word you are about to render:\n1. Check each word letter by letter against the TEXT RENDERING REQUIREMENTS section above.\n2. If a word looks wrong or you are unsure of the spelling, OMIT the word entirely.\n3. Render FEWER words perfectly rather than MORE words with errors.\n4. NEVER invent, paraphrase, or abbreviate any text — copy the exact strings provided.\n5. Short, simple words only — if the text is long, prioritize the headline and CTA.`;
+		const enhancedPrompt = `${referenceInstructions}${aspectInstruction}\n\nProfessional commercial advertisement photo. ${sanitizedPrompt}. High quality studio lighting, sharp details, clean background, modern minimal design. CRITICAL: Any human models must be FULLY CLOTHED. Do NOT render any hex codes, color codes, or technical codes as visible text in the image. Render all text EXACTLY as specified with correct spelling. CRITICAL: Maintain the exact same color palette across all variations — do not shift or alter brand colors.\n\n═══ IGNORE TECHNICAL TEXT (CRITICAL) ═══\nThe image must contain ONLY the marketing text listed in TEXT RENDERING REQUIREMENTS above.\nDo NOT render ANY of the following as visible text in the image:\n- Pixel dimensions (e.g. "115px", "1080x1080", "48pt")\n- CSS values or code (e.g. "font-size", "margin", "padding")\n- File paths, URLs, or technical identifiers\n- Numbers followed by units (px, rem, em, pt, vw, vh)\n- Aspect ratio labels (e.g. "1:1", "9:16", "16:9")\n- Any debug, metadata, or instructional text from this prompt\nIf you see ANY technical-looking text in this prompt, it is an INSTRUCTION — do NOT render it visually.\n\n═══ FINAL REMINDER — TEXT ACCURACY ═══\nBefore generating the image, verify EVERY word you are about to render:\n1. Check each word letter by letter against the TEXT RENDERING REQUIREMENTS section above.\n2. If a word looks wrong or you are unsure of the spelling, OMIT the word entirely.\n3. Render FEWER words perfectly rather than MORE words with errors.\n4. NEVER invent, paraphrase, or abbreviate any text — copy the exact strings provided.\n5. Short, simple words only — if the text is long, prioritize the headline and CTA.\n6. NEVER render dimension values, CSS properties, or technical metadata as visible text.`;
 
 		const requestId = Math.random().toString(36).substring(2, 8);
 		this.logger.log(`🎨 [${requestId}] ===== GEMINI FLASH IMAGE START | ${ratioText} | Model: ${this.MODEL} | Refs: ${refCount} =====`);
@@ -529,10 +529,33 @@ export class GeminiService {
 			/#([0-9a-fA-F]{3,8})\b/g,
 			(_match, hex) => {
 				const colorName = this.hexToColorName(hex);
-				this.logger.warn(`Stripped hex code #${hex} from Imagen prompt, replaced with "${colorName}"`);
+				this.logger.warn(`Stripped hex code #${hex} from prompt, replaced with "${colorName}"`);
 				return colorName;
 			},
 		);
+
+		// Strip CSS dimension values — Gemini renders "115px", "48px", "20rem" as visible text
+		sanitized = sanitized.replace(/\b\d+(\.\d+)?\s*px\b/gi, 'appropriate size');
+		sanitized = sanitized.replace(/\b\d+(\.\d+)?\s*rem\b/gi, 'appropriate size');
+		sanitized = sanitized.replace(/\b\d+(\.\d+)?\s*em\b/gi, 'appropriate size');
+		sanitized = sanitized.replace(/\b\d+(\.\d+)?\s*pt\b/gi, 'appropriate size');
+		sanitized = sanitized.replace(/\b\d+(\.\d+)?\s*vw\b/gi, 'appropriate size');
+		sanitized = sanitized.replace(/\b\d+(\.\d+)?\s*vh\b/gi, 'appropriate size');
+
+		// Strip pixel dimension pairs like "1080x1080", "1920x1080"
+		sanitized = sanitized.replace(/\b\d{3,4}\s*x\s*\d{3,4}\b/gi, '');
+
+		// Strip CSS-like property patterns: "font-size: 48px", "margin: 20px 10px"
+		sanitized = sanitized.replace(/\b(font-size|margin|padding|border-radius|gap|spacing|line-height|letter-spacing|width|height|top|left|right|bottom)\s*:\s*[\d\s.]+\w*/gi, '');
+
+		// Strip percentage values used as dimensions (e.g., "80% width")
+		sanitized = sanitized.replace(/\b\d+(\.\d+)?%\s*(opacity|transparency|width|height)/gi, 'subtle $2');
+
+		// Strip file paths and URLs that shouldn't appear in image
+		sanitized = sanitized.replace(/(?:\/[\w.-]+){2,}/g, '');
+
+		// Clean up duplicate whitespace from removals
+		sanitized = sanitized.replace(/\s{2,}/g, ' ').trim();
 
 		// Remove nude/naked/topless references
 		sanitized = sanitized.replace(/\b(nude|naked|topless)\b/gi, '');

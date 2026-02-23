@@ -139,9 +139,9 @@ export class GenerationProcessor extends WorkerHost {
 			const brandColorDesc = this.buildBrandColorDescription(brand);
 
 			// Ratio-specific prompts with color preservation instructions
-			const prompt1x1 = `${basePrompt}\n\nASPECT RATIO: Square (1:1, 1080x1080). This is the base design format.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
-			const prompt9x16 = `${basePrompt}\n\nASPECT RATIO: Vertical/Stories (9:16, 1080x1920). Stack elements vertically — product in middle, text at top, CTA at bottom. More vertical whitespace between elements.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
-			const prompt16x9 = `${basePrompt}\n\nASPECT RATIO: Horizontal/Landscape (16:9, 1920x1080). Side-by-side layout — text on one side, product on the other. Single line headlines preferred.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
+			const prompt1x1 = `${basePrompt}\n\nASPECT RATIO: Square format. This is the base design format.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
+			const prompt9x16 = `${basePrompt}\n\nASPECT RATIO: Vertical/Stories format. Stack elements vertically — product in middle, text at top, CTA at bottom. More vertical whitespace between elements.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
+			const prompt16x9 = `${basePrompt}\n\nASPECT RATIO: Horizontal/Landscape format. Side-by-side layout — text on one side, product on the other. Single line headlines preferred.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
 
 			// Send product photo + brand logo + concept image as reference images
 			const referenceImages = [product.photo_url, brand.logo_url, concept.image_url].filter(Boolean);

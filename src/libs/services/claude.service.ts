@@ -210,6 +210,7 @@ TEXT LENGTH RULES: Keep all text SHORT — shorter text = fewer spelling errors.
 
 CRITICAL RULES:
 - NEVER include hex codes in the improved prompt — use color names only
+- NEVER include pixel dimensions (e.g. "48px", "115px", "1080x1080") — use descriptive sizes ("large", "small", "subtle")
 - Spell-check every word in corrected copy
 - Reference "provided product photo" and "provided brand logo" — don't describe them
 - Focus the prompt improvements specifically on the identified issues
@@ -506,6 +507,14 @@ RULE 7: KEEP TEXT SHORT — SHORTER TEXT = FEWER SPELLING ERRORS IN IMAGES
 - GOOD words: "Natural", "Proven", "Fast Relief", "Lab Tested", "Pure", "Safe"
 - BAD words: "Pharmaceutical", "Anxiolytic", "Dermatologically", "Pheromones"
 
+RULE 8: NEVER USE PIXEL DIMENSIONS OR CSS VALUES IN gemini_image_prompt
+- NEVER: "font-size: 48px", "margin 20px", "shadow of 115px", "border-radius: 10px"
+- NEVER: "1080x1080", "1920x1080" or any pixel dimension pairs
+- ALWAYS: Use relative descriptions: "large headline", "small spacing", "subtle shadow", "rounded corners"
+- Gemini will LITERALLY render "115px" or "48pt" as visible text in the image
+- For sizes: use "large", "medium", "small", "subtle", "prominent" — NEVER numbers with units
+- For spacing: use "ample whitespace", "tight spacing", "generous margins" — NEVER pixel values
+
 ═══════════════════════════════════════════════════
 VARIATION REQUIREMENTS
 ═══════════════════════════════════════════════════
@@ -527,11 +536,13 @@ For each variation:
 
 BEFORE OUTPUTTING: Re-read EVERY gemini_image_prompt and verify:
 - Zero hex codes anywhere (search for # followed by letters/numbers)
+- Zero pixel dimensions (search for numbers followed by px, pt, rem, em)
 - Every word correctly spelled
 - All reviews/quotes are unique (no duplicates)
 - Product placement says "provided product photo" not a description
 - Logo placement says "provided brand logo" not a description
 - Colors described by name only
+- All sizes described with words (large, small, subtle) not numbers
 
 ${this.get6VariationsJsonSchema()}`;
 	}
@@ -639,6 +650,11 @@ RULE 7: KEEP TEXT SHORT — shorter text = fewer spelling errors in images.
 - CTA: MAX 3 words.
 - Avoid complex/unusual words that are hard to spell.
 
+RULE 8: NEVER USE PIXEL DIMENSIONS OR CSS VALUES IN gemini_image_prompt
+- NEVER: "font-size: 48px", "margin 20px", "shadow of 115px", "border-radius: 10px"
+- ALWAYS: Use relative descriptions: "large headline", "subtle shadow", "rounded corners"
+- Gemini renders dimension values as visible text in images
+
 You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
 {
   "headline": "Short, punchy headline (max 6 words)",
@@ -652,7 +668,7 @@ You MUST respond with valid JSON only, no markdown, no code blocks. The JSON mus
     "all_reviews_unique": true,
     "product_described_not_generated": true
   },
-  "gemini_image_prompt": "The COMPLETE image generation prompt following ALL rules above. Colors by NAME only. Reference provided product photo and brand logo."
+  "gemini_image_prompt": "The COMPLETE image generation prompt following ALL rules above. Colors by NAME only. NO pixel dimensions or CSS values. Reference provided product photo and brand logo."
 }`;
 	}
 
@@ -748,7 +764,7 @@ ${importantNotes ? `=== USER NOTES ===\n${importantNotes}` : ''}
 Generate EXACTLY 6 unique variations as a JSON object with a "variations" array. Each variation should:
 1. Use a DIFFERENT creative angle (emotional, social proof, problem-solution, feature highlight, urgency/offer, lifestyle)
 2. Have a unique headline — not just a rewording but a genuinely different approach
-3. Include a detailed gemini_image_prompt describing a 1080x1080 static image ad — use DESCRIPTIVE color names (NEVER hex codes), reference "the provided product photo" and "the provided brand logo"
+3. Include a detailed gemini_image_prompt describing a square static image ad — use DESCRIPTIVE color names (NEVER hex codes), reference "the provided product photo" and "the provided brand logo"
 4. Each gemini_image_prompt should describe a DIFFERENT visual layout and composition`;
 	}
 
