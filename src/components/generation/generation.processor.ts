@@ -128,7 +128,10 @@ export class GenerationProcessor extends WorkerHost {
 			}
 
 			// Use cleaned prompt (hex codes stripped, typos fixed)
-			const basePrompt = validation.cleanedPrompt;
+			// Prepend brand name override — ensures Gemini uses the actual brand,
+			// not any brand name visible in concept reference images
+			const brandOverride = `CRITICAL BRAND NAME REQUIREMENT:\n- The brand name is "${brand.name}" — spell it EXACTLY as shown\n- Display "${brand.name}" as the brand name in the ad\n- If you see a DIFFERENT brand name in any reference image, IGNORE it and use "${brand.name}" instead\n- The brand logo text must read "${brand.name}"\n\n`;
+			const basePrompt = brandOverride + validation.cleanedPrompt;
 
 			// Build brand color description for ratio-specific prompts
 			const brandColorDesc = this.buildBrandColorDescription(brand);
@@ -417,7 +420,9 @@ export class GenerationProcessor extends WorkerHost {
 
 			// Build brand color description for prompts
 			const brandColorDesc = this.buildBrandColorDescription(brandSnapshot as Brand);
-			const basePrompt = validation.cleanedPrompt;
+			const brandName = (brandSnapshot as any).name || '';
+			const brandOverrideFix = brandName ? `CRITICAL BRAND NAME REQUIREMENT:\n- The brand name is "${brandName}" — spell it EXACTLY\n- If you see a DIFFERENT brand name in any reference image, IGNORE it and use "${brandName}" instead\n\n` : '';
+			const basePrompt = brandOverrideFix + validation.cleanedPrompt;
 
 			// Generate all 3 ratios with retry logic
 			const [result1x1, result9x16, result16x9] = await Promise.all([

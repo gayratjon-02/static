@@ -162,8 +162,8 @@ export class GeminiService {
 		const referenceInstructions = refCount > 0 ? [
 			'REFERENCE IMAGES PROVIDED (use them in the ad):',
 			refCount >= 1 ? '- Image 1: PRODUCT IMAGE — this is the actual product. Use this exact product appearance in the ad.' : '',
-			refCount >= 2 ? '- Image 2: BRAND LOGO — use this exact logo in the ad. Render the brand name exactly as shown.' : '',
-			refCount >= 3 ? '- Image 3: CONCEPT REFERENCE — use this as a style/layout reference for the ad design.' : '',
+			refCount >= 2 ? '- Image 2: BRAND LOGO — use this exact logo in the ad. Render the brand name exactly as shown in this logo.' : '',
+			refCount >= 3 ? '- Image 3: CONCEPT REFERENCE — this is a STYLE/LAYOUT reference ONLY. Copy the layout, color scheme, and design style. DO NOT copy any brand names, product names, or text content from this image. It may show a different brand — IGNORE that brand name completely.' : '',
 		].filter(Boolean).join('\n') + '\n\n' : '';
 
 		const aspectInstruction = `Generate this image in ${ratioText} aspect ratio.`;
