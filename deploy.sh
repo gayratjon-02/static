@@ -38,4 +38,4 @@ echo "   docker compose logs -f redis           - View Redis logs"
 echo "   docker compose ps                      - Container status"
 echo "   docker compose down                    - Stop all containers"
 
-docker compose logs --tail 200 -f
+docker compose logs --tail 50
