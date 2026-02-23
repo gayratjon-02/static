@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
-import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { GenerationService } from './generation.service';
 import { S3Service } from '../s3/s3.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -40,6 +40,7 @@ export class GenerationController {
 		return this.generationService.getStatus(jobId, authMember);
 	}
 
+	@SkipThrottle()
 	@UseGuards(AuthGuard)
 	@Get('getBatchStatus/:batchId')
 	public async getBatchStatus(
