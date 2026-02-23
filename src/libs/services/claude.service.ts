@@ -243,14 +243,14 @@ Return valid JSON only.`;
 		let messageContent: any[];
 		if (imageUrl) {
 			try {
-				const imageBase64 = await this.downloadImageAsBase64(imageUrl);
+				const { base64, mediaType } = await this.downloadImageAsBase64(imageUrl);
 				messageContent = [
 					{
 						type: 'image',
 						source: {
 							type: 'base64',
-							media_type: 'image/png',
-							data: imageBase64,
+							media_type: mediaType,
+							data: base64,
 						},
 					},
 					{ type: 'text', text: userPromptText },
@@ -292,12 +292,12 @@ Return valid JSON only.`;
 		const imageBlocks: any[] = [];
 		for (const url of validUrls) {
 			try {
-				const base64 = await this.downloadImageAsBase64(url);
+				const { base64, mediaType } = await this.downloadImageAsBase64(url);
 				imageBlocks.push({
 					type: 'image',
 					source: {
 						type: 'base64',
-						media_type: 'image/png',
+						media_type: mediaType,
 						data: base64,
 					},
 				});
@@ -375,12 +375,36 @@ Output a dense, structured description covering every point above. Do not omit a
 
 	/**
 	 * Download image from URL as base64 string (for Claude vision).
+	 * Returns { base64, mediaType } with auto-detected media type.
 	 */
-	private async downloadImageAsBase64(url: string): Promise<string> {
+	private async downloadImageAsBase64(url: string): Promise<{ base64: string; mediaType: string }> {
 		const response = await fetch(url);
 		if (!response.ok) throw new Error(`Image download failed: ${response.status}`);
 		const buffer = await response.arrayBuffer();
-		return Buffer.from(buffer).toString('base64');
+		const base64 = Buffer.from(buffer).toString('base64');
+		const contentType = response.headers.get('content-type') || '';
+		const mediaType = this.detectMediaType(base64, contentType);
+		return { base64, mediaType };
+	}
+
+	/**
+	 * Detect actual image media type from base64 header bytes.
+	 * Falls back to Content-Type header, then image/jpeg as safe default.
+	 */
+	private detectMediaType(base64Data: string, contentTypeHeader?: string): string {
+		const header = base64Data.substring(0, 20);
+
+		if (header.startsWith('/9j/')) return 'image/jpeg';
+		if (header.startsWith('iVBOR')) return 'image/png';
+		if (header.startsWith('UklGR')) return 'image/webp';
+		if (header.startsWith('R0lGO')) return 'image/gif';
+
+		// Fallback to Content-Type header if magic bytes don't match
+		if (contentTypeHeader && contentTypeHeader.startsWith('image/')) {
+			return contentTypeHeader.split(';')[0].trim();
+		}
+
+		return 'image/jpeg';
 	}
 
 	/**
