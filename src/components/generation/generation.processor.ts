@@ -82,6 +82,9 @@ export class GenerationProcessor extends WorkerHost {
 				this.fetchConcept(concept_id),
 			]);
 
+			// Debug: log brand data to help diagnose brand name issues
+			this.logger.log(`=== BRAND DEBUG === name: "${brand.name}" | logo_url: "${(brand.logo_url || '').substring(0, 80)}" | industry: "${brand.industry}" ===`);
+
 			// 4. Claude API — ad copy generation (if not already in job data)
 			let claudeResponse: ClaudeResponseJson;
 
@@ -140,7 +143,7 @@ export class GenerationProcessor extends WorkerHost {
 			// Use cleaned prompt (hex codes stripped, typos fixed)
 			// Prepend brand name override — ensures Gemini uses the actual brand,
 			// not any brand name visible in concept reference images
-			const brandOverride = `CRITICAL BRAND NAME REQUIREMENT:\n- The brand name is "${brand.name}" — spell it EXACTLY as shown\n- Display "${brand.name}" as the brand name in the ad\n- If you see a DIFFERENT brand name in any reference image, IGNORE it and use "${brand.name}" instead\n- The brand logo text must read "${brand.name}"\n\n`;
+			const brandOverride = `═══ HIGHEST PRIORITY — BRAND NAME ═══\nTHE BRAND NAME IS: "${brand.name}"\nSPELL IT: ${brand.name.split('').join(' - ')}\n\nRULES:\n- Display "${brand.name}" as the brand name in the ad — this is NOT negotiable\n- The brand logo text must read "${brand.name}" — NOT any text from the logo image\n- If the logo image shows "GlowVita", "PREMIUM SKINCARE", or ANY other brand name — IGNORE IT\n- The logo image may contain a placeholder brand name — always override with "${brand.name}"\n- If ANY reference image shows a different brand name, IGNORE it and use "${brand.name}"\n═══════════════════════════════════════\n\n`;
 			const productContext = this.buildProductContext(brand, product);
 			const textSpec = this.buildTextRenderingSpec(claudeResponse);
 			const basePrompt = brandOverride + productContext + textSpec + validation.cleanedPrompt;
@@ -149,9 +152,11 @@ export class GenerationProcessor extends WorkerHost {
 			const brandColorDesc = this.buildBrandColorDescription(brand);
 
 			// Ratio-specific prompts with color preservation instructions
-			const prompt1x1 = `${basePrompt}\n\nASPECT RATIO: Square format. This is the base design format.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
-			const prompt9x16 = `${basePrompt}\n\nASPECT RATIO: Vertical/Stories format. Stack elements vertically — product in middle, text at top, CTA at bottom. More vertical whitespace between elements.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
-			const prompt16x9 = `${basePrompt}\n\nASPECT RATIO: Horizontal/Landscape format. Side-by-side layout — text on one side, product on the other. Single line headlines preferred.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`;
+			// Brand name reminder appended at END of each prompt (recency bias — models pay more attention to end of prompt)
+			const brandReminder = `\nREMINDER: The brand name is "${brand.name}" — display it clearly. Do NOT use any other brand name from reference images.`;
+			const prompt1x1 = `${basePrompt}\n\nASPECT RATIO: Square format. This is the base design format.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
+			const prompt9x16 = `${basePrompt}\n\nASPECT RATIO: Vertical/Stories format. Stack elements vertically — product in middle, text at top, CTA at bottom. More vertical whitespace between elements.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
+			const prompt16x9 = `${basePrompt}\n\nASPECT RATIO: Horizontal/Landscape format. Side-by-side layout — text on one side, product on the other. Single line headlines preferred.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
 
 			// Send product photo + brand logo + concept image as reference images
 			const referenceImages = [product.photo_url, brand.logo_url, concept.image_url].filter(Boolean);
@@ -535,7 +540,7 @@ export class GenerationProcessor extends WorkerHost {
 			// Build brand color description for prompts
 			const brandColorDesc = this.buildBrandColorDescription(brandSnapshot as Brand);
 			const brandName = (brandSnapshot as any).name || '';
-			const brandOverrideFix = brandName ? `CRITICAL BRAND NAME REQUIREMENT:\n- The brand name is "${brandName}" — spell it EXACTLY\n- If you see a DIFFERENT brand name in any reference image, IGNORE it and use "${brandName}" instead\n\n` : '';
+			const brandOverrideFix = brandName ? `═══ HIGHEST PRIORITY — BRAND NAME ═══\nTHE BRAND NAME IS: "${brandName}"\nSPELL IT: ${brandName.split('').join(' - ')}\n- Display "${brandName}" as the brand name — NOT any text from the logo image\n- If the logo image shows a different brand name — IGNORE IT, use "${brandName}"\n═══════════════════════════════════════\n\n` : '';
 			const productContext = this.buildProductContext(brandSnapshot as Brand, productSnapshot as Product);
 			const textSpec = this.buildTextRenderingSpec(claudeResponse);
 			const basePrompt = brandOverrideFix + productContext + textSpec + validation.cleanedPrompt;

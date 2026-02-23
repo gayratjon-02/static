@@ -162,7 +162,13 @@ export class GeminiService {
 		const referenceInstructions = refCount > 0 ? [
 			'REFERENCE IMAGES PROVIDED:',
 			refCount >= 1 ? '- Image 1: PRODUCT IMAGE — this is the actual product. Use this exact product appearance in the ad.' : '',
-			refCount >= 2 ? '- Image 2: BRAND LOGO — use this exact logo in the ad. Render the brand name exactly as shown in this logo.' : '',
+			refCount >= 2 ? [
+				'- Image 2: BRAND LOGO — use the VISUAL DESIGN (shape, colors, icon style) from this logo image.',
+				'  CRITICAL: The logo image may contain text from a DIFFERENT brand (placeholder/template).',
+				'  IGNORE any text visible in the logo image. Instead, render the brand name from the',
+				'  CRITICAL BRAND NAME REQUIREMENT section in this prompt. Use ONLY that brand name.',
+				'  Do NOT reproduce "GlowVita", "PREMIUM SKINCARE", or any other text from the logo image.',
+			].join('\n') : '',
 			refCount >= 3 ? [
 				'- Image 3: CONCEPT REFERENCE — LAYOUT AND VISUAL STYLE ONLY.',
 				'',
