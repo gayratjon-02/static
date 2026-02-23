@@ -131,8 +131,9 @@ export class GenerationProcessor extends WorkerHost {
 			// Prepend brand name override — ensures Gemini uses the actual brand,
 			// not any brand name visible in concept reference images
 			const brandOverride = `CRITICAL BRAND NAME REQUIREMENT:\n- The brand name is "${brand.name}" — spell it EXACTLY as shown\n- Display "${brand.name}" as the brand name in the ad\n- If you see a DIFFERENT brand name in any reference image, IGNORE it and use "${brand.name}" instead\n- The brand logo text must read "${brand.name}"\n\n`;
+			const productContext = this.buildProductContext(brand, product);
 			const textSpec = this.buildTextRenderingSpec(claudeResponse);
-			const basePrompt = brandOverride + textSpec + validation.cleanedPrompt;
+			const basePrompt = brandOverride + productContext + textSpec + validation.cleanedPrompt;
 
 			// Build brand color description for ratio-specific prompts
 			const brandColorDesc = this.buildBrandColorDescription(brand);
@@ -324,6 +325,26 @@ export class GenerationProcessor extends WorkerHost {
 	}
 
 	/**
+	 * Build product context block — tells Gemini what this ad is for,
+	 * preventing content cross-contamination from concept reference images.
+	 */
+	private buildProductContext(brand: Brand, product: Product): string {
+		const lines: string[] = [
+			'═══ PRODUCT CONTEXT ═══',
+			`This ad is for: ${product.name} by ${brand.name}`,
+			`Product description: ${(product.description || '').substring(0, 200)}`,
+			'',
+			'ALL content in this ad must be relevant to the product above.',
+			'If the concept reference image shows a DIFFERENT product (different name, different category, different claims) — DO NOT copy any of that content.',
+			'The concept image is for LAYOUT/STYLE reference ONLY — its text, product imagery, and claims belong to a different product.',
+			'Render ONLY the text provided in the TEXT RENDERING REQUIREMENTS section below.',
+			'═══════════════════════',
+			'',
+		];
+		return lines.join('\n');
+	}
+
+	/**
 	 * Build explicit text rendering specification from Claude's ad copy.
 	 * Lists every text string that must appear in the image — Gemini copies these character-by-character.
 	 */
@@ -459,8 +480,9 @@ export class GenerationProcessor extends WorkerHost {
 			const brandColorDesc = this.buildBrandColorDescription(brandSnapshot as Brand);
 			const brandName = (brandSnapshot as any).name || '';
 			const brandOverrideFix = brandName ? `CRITICAL BRAND NAME REQUIREMENT:\n- The brand name is "${brandName}" — spell it EXACTLY\n- If you see a DIFFERENT brand name in any reference image, IGNORE it and use "${brandName}" instead\n\n` : '';
+			const productContext = this.buildProductContext(brandSnapshot as Brand, productSnapshot as Product);
 			const textSpec = this.buildTextRenderingSpec(claudeResponse);
-			const basePrompt = brandOverrideFix + textSpec + validation.cleanedPrompt;
+			const basePrompt = brandOverrideFix + productContext + textSpec + validation.cleanedPrompt;
 
 			// Generate all 3 ratios with retry logic
 			const [result1x1, result9x16, result16x9] = await Promise.all([

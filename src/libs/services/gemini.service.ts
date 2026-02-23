@@ -160,10 +160,29 @@ export class GeminiService {
 		// Build reference image instructions if images are provided
 		const refCount = referenceImageParts?.length || 0;
 		const referenceInstructions = refCount > 0 ? [
-			'REFERENCE IMAGES PROVIDED (use them in the ad):',
+			'REFERENCE IMAGES PROVIDED:',
 			refCount >= 1 ? '- Image 1: PRODUCT IMAGE — this is the actual product. Use this exact product appearance in the ad.' : '',
 			refCount >= 2 ? '- Image 2: BRAND LOGO — use this exact logo in the ad. Render the brand name exactly as shown in this logo.' : '',
-			refCount >= 3 ? '- Image 3: CONCEPT REFERENCE — this is a STYLE/LAYOUT reference ONLY. Copy the layout, color scheme, and design style. DO NOT copy any brand names, product names, or text content from this image. It may show a different brand — IGNORE that brand name completely.' : '',
+			refCount >= 3 ? [
+				'- Image 3: CONCEPT REFERENCE — LAYOUT AND VISUAL STYLE ONLY.',
+				'',
+				'  ═══ CONTENT ISOLATION RULES (CRITICAL) ═══',
+				'  FROM THE CONCEPT IMAGE, COPY ONLY:',
+				'    • Overall layout structure (where elements are positioned)',
+				'    • Visual style (font types, design aesthetic, element types)',
+				'    • Background style and composition approach',
+				'  FROM THE CONCEPT IMAGE, DO NOT COPY:',
+				'    • ANY text, testimonials, quotes, or written words',
+				'    • ANY product names, brand names, or logos',
+				'    • ANY product claims, feature descriptions, or slogans',
+				'    • ANY product imagery (bottles, containers, packaging)',
+				'    • ANY reviewer names or attribution text',
+				'    • ANY pricing, offers, or promotional text',
+				'  The concept image shows a DIFFERENT product from a DIFFERENT brand.',
+				'  ALL text visible in the concept image belongs to that other product — DO NOT reproduce it.',
+				'  The ONLY text allowed in this ad is from the TEXT RENDERING REQUIREMENTS section below.',
+				'  ═══════════════════════════════════════════',
+			].join('\n') : '',
 		].filter(Boolean).join('\n') + '\n\n' : '';
 
 		const aspectInstruction = `Generate this image in ${ratioText} aspect ratio.`;
@@ -177,8 +196,12 @@ export class GeminiService {
 		try {
 			this.checkCircuitBreaker();
 
-			// Build content parts: reference images first, then text prompt
+			// Build content parts: TEXT FIRST (highest priority), then images
+			// Placing text before images ensures Gemini prioritizes written instructions
+			// over any text visible in reference images (prevents content cross-contamination)
 			const contentParts: any[] = [];
+
+			contentParts.push({ text: enhancedPrompt });
 
 			if (referenceImageParts) {
 				for (const img of referenceImageParts) {
@@ -190,8 +213,6 @@ export class GeminiService {
 					});
 				}
 			}
-
-			contentParts.push({ text: enhancedPrompt });
 
 			const generatePromise = client.models.generateContent({
 				model: this.MODEL,
