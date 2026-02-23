@@ -259,6 +259,54 @@ export class PromptValidatorService {
 	}
 
 	/**
+	 * Validate and shorten badge-like callout text to 2 words max.
+	 * Small circular badge icons have very limited space — 3+ words cause merging ("60 Time Setup").
+	 * Only affects callouts that are exactly 3 words (badge-range) or match known badge patterns.
+	 * Callouts with 4-5 words are assumed to be review text and left untouched.
+	 */
+	validateBadgeText(callouts: string[]): string[] {
+		const shortenings: Record<string, string> = {
+			'one time setup': 'Easy Setup',
+			'lasts 60 days': '60 Days',
+			'easy to use': 'Easy Use',
+			'vet approved formula': 'Vet Approved',
+			'works for all breeds': 'All Breeds',
+			'safe for daily use': 'Safe Daily',
+			'no mess formula': 'No Mess',
+			'clinically tested formula': 'Lab Tested',
+			'money back guarantee': 'Guaranteed',
+			'all natural ingredients': 'All Natural',
+			'fast acting formula': 'Fast Acting',
+			'made in usa': 'USA Made',
+			'free shipping available': 'Free Shipping',
+			'satisfaction guaranteed': 'Guaranteed',
+		};
+
+		return callouts.map(callout => {
+			const words = callout.trim().split(/\s+/);
+			if (words.length <= 2) return callout;
+
+			const lowerCallout = callout.toLowerCase().trim();
+
+			// Check known shortenings first (any length)
+			if (shortenings[lowerCallout]) {
+				this.logger.warn(`Badge shortened: "${callout}" → "${shortenings[lowerCallout]}"`);
+				return shortenings[lowerCallout];
+			}
+
+			// Only auto-truncate 3-word callouts (likely badges, not reviews)
+			// 4-5 word callouts are likely review text — leave them alone
+			if (words.length === 3) {
+				const shortened = words.slice(-2).join(' ');
+				this.logger.warn(`Badge truncated from 3 to 2 words: "${callout}" → "${shortened}"`);
+				return shortened;
+			}
+
+			return callout;
+		});
+	}
+
+	/**
 	 * Enforce a strict word limit on review/callout texts.
 	 * Gemini renders 4-5 word phrases accurately; longer text causes garbled trailing words.
 	 */

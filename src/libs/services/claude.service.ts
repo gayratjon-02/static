@@ -521,6 +521,14 @@ RULE 7: KEEP TEXT SHORT — SHORTER TEXT = FEWER SPELLING ERRORS IN IMAGES
   If a review needs more than 5 words, shorten it:
     "My dog finally sleeps through the night" → "Finally sleeps all night" (4 words)
     "No more embarrassing barking at guests" → "No more guest barking" (4 words)
+- FEATURE BADGES (small circular icons): MAXIMUM 2 words each.
+  Badges have very limited space — more than 2 words causes text to merge with neighboring badges.
+  GOOD badge text: "60 Days", "Vet Approved", "Easy Setup", "All Breeds", "No Mess", "Safe Daily"
+  BAD badge text: "One Time Setup" (3 words), "Lasts 60 Days" (3 words), "Easy To Use" (3 words)
+  If a badge concept needs 3+ words, shorten it:
+    "One Time Setup" → "Easy Setup"
+    "Works For All Breeds" → "All Breeds"
+    "Safe For Daily Use" → "Safe Daily"
 - CTA button: MAX 3 words (e.g. "Shop Now", "Try Free", "Get Yours").
 - ALWAYS prefer simple, commonly-spelled English words.
 - AVOID words with double letters that AI struggles to spell: "effortless" → "easy", "professional" → "expert", "recommended" → "approved", "comfortable" → "cozy", "immediately" → "fast", "aggressive" → "intense"
@@ -599,10 +607,10 @@ ${this.get6VariationsJsonSchema()}`;
 TEXT LENGTH CONSTRAINTS (shorter text = fewer spelling errors in images):
 - headline: MAX 6 words. Use simple, common English words.
 - subheadline: MAX 10 words.
-- callout_texts: Each callout MAX 3 words. Prefer single-word or two-word callouts.
+- callout_texts: Each callout MAX 5 words. Feature badges MAX 2 words each.
 - cta_text: MAX 3 words (e.g. "Shop Now", "Try Free", "Get Yours").
-- Testimonials/reviews in callouts: MAX 15 words each.
-- PREFER simple, commonly-spelled English words. AVOID unusual, complex, or technical words that are hard to spell.
+- PREFER simple, commonly-spelled English words. AVOID unusual, complex, or technical words.
+- AVOID double-letter words: "effortless" → "easy", "recommended" → "approved", "professional" → "expert"
 - Examples of GOOD callout words: "Natural", "Proven", "Fast Relief", "Lab Tested"
 - Examples of BAD callout words: "Pharmaceutical-Grade", "Anxiolytic", "Dermatologically"
 
@@ -678,6 +686,7 @@ RULE 6: COLOR DESCRIPTIONS — Always convert hex to descriptive names in the ge
 RULE 7: KEEP TEXT SHORT — shorter text = fewer spelling errors in images.
 - Headlines: MAX 6 words, simple common words only.
 - Callouts/review cards: MAXIMUM 5 words each (HARD LIMIT — longer text causes garbled rendering).
+- Feature badges (small icons): MAXIMUM 2 words each — more words cause badges to merge into nonsense.
 - CTA: MAX 3 words.
 - Avoid words with double letters: use "easy" not "effortless", "expert" not "professional", "approved" not "recommended".
 

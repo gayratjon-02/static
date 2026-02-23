@@ -157,6 +157,8 @@ export class GenerationProcessor extends WorkerHost {
 				);
 				// ✅ Enforce strict 5-word limit on review cards (prevents garbled trailing words)
 				claudeResponse.callout_texts = this.promptValidator.enforceWordLimit(claudeResponse.callout_texts, 5);
+				// ✅ Validate badge text — shorten 3+ word badges to 2 words (prevents merged badges like "60 Time Setup")
+				claudeResponse.callout_texts = this.promptValidator.validateBadgeText(claudeResponse.callout_texts);
 			}
 
 			// Use cleaned prompt (hex codes stripped, typos fixed)
@@ -408,22 +410,30 @@ export class GenerationProcessor extends WorkerHost {
 		}
 		if (claudeResponse.callout_texts?.length > 0) {
 			const count = claudeResponse.callout_texts.length;
-			lines.push(`REVIEW/CALLOUT CARDS: Render EXACTLY ${count} cards — not more, not less.`);
-			lines.push(`Each card must have DIFFERENT text. Do NOT duplicate any card.`);
-			lines.push(`If the concept image shows more cards, render ONLY these ${count}:`);
+			lines.push(`TEXT ELEMENTS: Render EXACTLY ${count} elements — not more, not less.`);
+			lines.push(`Each element is INDEPENDENT — do NOT merge or combine text from different elements.`);
+			lines.push(`Each element must have DIFFERENT text. Do NOT duplicate any element.`);
 			lines.push('');
 			claudeResponse.callout_texts.forEach((callout, i) => {
 				const wc = this.countWords(callout);
-				if (wc > 6) {
-					// Long callouts get line-split formatting to prevent duplication
+				lines.push(`--- ELEMENT ${i + 1} of ${count} START ---`);
+				if (wc <= 2) {
+					// Short text = badge/icon format
+					lines.push(`Type: BADGE (small icon)`);
+					lines.push(`Text: "${callout}"`);
+					lines.push(`RULES: Render ONLY these ${wc} word(s). Do NOT add words from other badges.`);
+				} else if (wc > 6) {
 					const splitLines = this.splitIntoRenderLines(callout, 5);
-					lines.push(`CARD ${i + 1} of ${count} (${wc} words, render on ${splitLines.length} lines):`);
+					lines.push(`Type: REVIEW CARD (${wc} words, render on ${splitLines.length} lines)`);
 					splitLines.forEach((line, j) => {
 						lines.push(`  Line ${j + 1}: "${line}"`);
 					});
 				} else {
-					lines.push(`CARD ${i + 1} of ${count} (${wc} words): "${callout}"`);
+					lines.push(`Type: CALLOUT (${wc} words)`);
+					lines.push(`Text: "${callout}"`);
 				}
+				lines.push(`--- ELEMENT ${i + 1} of ${count} END ---`);
+				lines.push('');
 			});
 		}
 
@@ -592,6 +602,7 @@ export class GenerationProcessor extends WorkerHost {
 					(t: string) => this.promptValidator.simplifyDifficultWords(t),
 				);
 				claudeResponse.callout_texts = this.promptValidator.enforceWordLimit(claudeResponse.callout_texts, 5);
+				claudeResponse.callout_texts = this.promptValidator.validateBadgeText(claudeResponse.callout_texts);
 			}
 			let cleanedPromptFix = this.promptValidator.simplifyDifficultWords(validation.cleanedPrompt);
 
