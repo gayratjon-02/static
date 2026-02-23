@@ -1,4 +1,4 @@
-export const GEMINI_MODEL = 'gemini-2.5-flash-preview-image-generation'; // Gemini Flash Image (text+image input → image output)
+export const GEMINI_MODEL = 'gemini-2.5-flash-image'; // Gemini Flash Image (text+image input → image output)
 export const VALID_IMAGE_SIZES = ['1024x1024', '1K', '2K', '4K']; // Mapping might differ based on SDK
 
 export interface GeminiImageResult {
