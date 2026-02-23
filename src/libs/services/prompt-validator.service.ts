@@ -156,6 +156,68 @@ export class PromptValidatorService {
 		};
 	}
 
+	/**
+	 * Validate that Claude's ad copy does not contain claims borrowed from concept reference images.
+	 * Checks all text fields against the product's actual USPs and flags foreign content.
+	 */
+	validateAdCopyRelevance(
+		claudeOutput: any,
+		product: { name: string; description?: string; usps?: string[]; ingredients_features?: string },
+		brand: { name: string; industry?: string },
+	): { isClean: boolean; warnings: string[] } {
+		const warnings: string[] = [];
+
+		// Combine all text fields from ad copy
+		const allText = [
+			claudeOutput.headline,
+			claudeOutput.subheadline,
+			claudeOutput.body_text,
+			claudeOutput.cta_text,
+			claudeOutput.gemini_image_prompt,
+			...(claudeOutput.callout_texts || []),
+		].filter(Boolean).join(' ').toLowerCase();
+
+		// Build product context keywords for relevance checking
+		const productContext = [
+			product.name,
+			product.description || '',
+			...(product.usps || []),
+			product.ingredients_features || '',
+			brand.name,
+			brand.industry || '',
+		].join(' ').toLowerCase();
+
+		// Known concept template terms that indicate cross-contamination
+		// These are common in concept images but unlikely to be relevant to arbitrary products
+		const crossContaminationTerms = [
+			// Human health supplement terms (ARMRA, AG1, etc.)
+			'colostrum', 'bioactive nutrients', 'grass-fed', 'grass fed',
+			'gut health', 'bloating', 'probiotic', 'prebiotic',
+			'superfood', 'antioxidant',
+			// Beauty/skincare terms
+			'retinol', 'collagen boost', 'radiant skin',
+			'anti-aging', 'complexion',
+			// Specific brand attributes from common templates
+			'physician-founded', 'physician founded',
+		];
+
+		for (const term of crossContaminationTerms) {
+			// Only flag if term appears in ad copy BUT NOT in the actual product data
+			if (allText.includes(term) && !productContext.includes(term)) {
+				warnings.push(`Possible concept leak: "${term}" found in ad copy but not in product data for "${product.name}"`);
+			}
+		}
+
+		if (warnings.length > 0) {
+			this.logger.warn(`Ad copy relevance check: ${warnings.length} warnings — ${warnings.join('; ')}`);
+		}
+
+		return {
+			isClean: warnings.length === 0,
+			warnings,
+		};
+	}
+
 	private hexToName(hex: string): string {
 		const colorMap: Record<string, string> = {
 			'ffffff': 'pure white',

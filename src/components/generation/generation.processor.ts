@@ -127,6 +127,16 @@ export class GenerationProcessor extends WorkerHost {
 				this.logger.warn(`Generation ${generated_ad_id}: Fixed ${validation.issues.length} prompt issues: ${validation.issues.join('; ')}`);
 			}
 
+			// ✅ Check for concept image content leaking into ad copy
+			const relevanceCheck = this.promptValidator.validateAdCopyRelevance(
+				claudeResponse,
+				{ name: product.name, description: product.description, usps: product.usps, ingredients_features: product.ingredients_features },
+				{ name: brand.name, industry: brand.industry },
+			);
+			if (!relevanceCheck.isClean) {
+				this.logger.warn(`Generation ${generated_ad_id}: Concept content leak detected: ${relevanceCheck.warnings.join('; ')}`);
+			}
+
 			// Use cleaned prompt (hex codes stripped, typos fixed)
 			// Prepend brand name override — ensures Gemini uses the actual brand,
 			// not any brand name visible in concept reference images
@@ -485,6 +495,16 @@ export class GenerationProcessor extends WorkerHost {
 
 			if (validation.issues.length > 0) {
 				this.logger.warn(`Fix-errors ${new_ad_id}: Fixed ${validation.issues.length} prompt issues: ${validation.issues.join('; ')}`);
+			}
+
+			// ✅ Check for concept content leak in fix-errors
+			const relevanceCheckFix = this.promptValidator.validateAdCopyRelevance(
+				claudeResponse,
+				{ name: (productSnapshot as any).name || '', description: (productSnapshot as any).description, usps: (productSnapshot as any).usps, ingredients_features: (productSnapshot as any).ingredients_features },
+				{ name: (brandSnapshot as any).name || '', industry: (brandSnapshot as any).industry },
+			);
+			if (!relevanceCheckFix.isClean) {
+				this.logger.warn(`Fix-errors ${new_ad_id}: Concept content leak detected: ${relevanceCheckFix.warnings.join('; ')}`);
 			}
 
 			// 4. Gemini — generate fixed images with reference images and retry logic

@@ -769,7 +769,29 @@ Category: ${concept.category}
 Name: ${concept.name}
 Description: ${concept.description}
 Tags: ${concept.tags?.join(', ') || 'N/A'}
-${concept.image_url ? `Reference Image: ${concept.image_url}` : ''}
+${concept.image_url ? `Reference Image: PROVIDED as concept image` : ''}
+
+═══ CONCEPT IMAGE CONTENT ISOLATION (CRITICAL) ═══
+The concept reference image shows an ad for a DIFFERENT product by a DIFFERENT brand.
+USE from the concept image:
+- The visual LAYOUT (where text, images, and badges are positioned)
+- The number and type of elements (e.g., 1 testimonial, 2 feature callouts, 1 price badge)
+- The general tone and style (e.g., testimonial-driven, feature-focused)
+DO NOT USE from the concept image:
+- ANY specific product claims, feature descriptions, or ingredient lists
+- ANY specific brand attributes (e.g., "physician-founded", "science-backed")
+- ANY specific testimonial quotes or reviewer names
+- ANY specific pricing or offer text
+- ANY product category language that does not match "${product.name}"
+The concept image is for a COMPLETELY DIFFERENT product. Extract only the STRUCTURE, not the SUBSTANCE.
+All claims, features, and text in YOUR output must come ONLY from the PRODUCT and BRAND data above.
+═══════════════════════════════════════════════════
+
+=== APPROVED PRODUCT CLAIMS ===
+Use ONLY these claims/features in the ad copy — do NOT invent or borrow from the concept image:
+${product.usps?.map((u, i) => `${i + 1}. ${u}`).join('\n') || '- No specific USPs provided — use the product description above'}
+${product.ingredients_features ? `Additional features: ${product.ingredients_features}` : ''}
+If the concept image has more feature callouts than approved claims above, use FEWER callouts — never invent claims.
 
 ${importantNotes ? `=== USER NOTES ===\n${importantNotes}` : ''}
 
@@ -777,7 +799,8 @@ Generate EXACTLY 6 unique variations as a JSON object with a "variations" array.
 1. Use a DIFFERENT creative angle (emotional, social proof, problem-solution, feature highlight, urgency/offer, lifestyle)
 2. Have a unique headline — not just a rewording but a genuinely different approach
 3. Include a detailed gemini_image_prompt describing a square static image ad — use DESCRIPTIVE color names (NEVER hex codes), reference "the provided product photo" and "the provided brand logo"
-4. Each gemini_image_prompt should describe a DIFFERENT visual layout and composition`;
+4. Each gemini_image_prompt should describe a DIFFERENT visual layout and composition
+5. Use ONLY approved product claims from the data above — NEVER borrow claims from the concept image`;
 	}
 
 	/**
@@ -908,13 +931,25 @@ Category: ${concept.category}
 Name: ${concept.name}
 Description: ${concept.description}
 Tags: ${concept.tags?.join(', ') || 'N/A'}
-${concept.image_url ? `Reference Image: ${concept.image_url}` : ''}
+${concept.image_url ? `Reference Image: PROVIDED as concept image` : ''}
+
+═══ CONCEPT IMAGE CONTENT ISOLATION (CRITICAL) ═══
+The concept reference image shows an ad for a DIFFERENT product by a DIFFERENT brand.
+USE from the concept image: visual LAYOUT, element positioning, tone and style.
+DO NOT USE: product claims, brand attributes, testimonial text, pricing, or category-specific language.
+All claims and text must come ONLY from the PRODUCT and BRAND data above.
+═══════════════════════════════════════════════════
+
+=== APPROVED PRODUCT CLAIMS ===
+Use ONLY these claims in the ad — do NOT borrow from the concept image:
+${product.usps?.map((u, i) => `${i + 1}. ${u}`).join('\n') || '- Use the product description above'}
+${product.ingredients_features ? `Additional features: ${product.ingredients_features}` : ''}
 
 ${importantNotes ? `=== USER NOTES ===\n${importantNotes}` : ''}
 
 Generate the ad creative as JSON.
 The gemini_image_prompt must be EXTREMELY detailed and follow the "Visual Style" and "Category Rules" defined above.
-It must describe a 1080x1080 static image ad — use DESCRIPTIVE color names (NEVER hex codes), reference "the provided product photo" and "the provided brand logo".
+It must describe a square static image ad — use DESCRIPTIVE color names (NEVER hex codes), reference "the provided product photo" and "the provided brand logo".
 Ensure the layout is robust and does not rely on hardcoded pixel coordinates.`;
 	}
 
