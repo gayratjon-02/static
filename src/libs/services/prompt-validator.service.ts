@@ -114,17 +114,14 @@ export class PromptValidatorService {
 		}
 
 		// ════════════════════════════════════════
-		// CHECK 3: Detect duplicate review quotes
+		// CHECK 3: Deduplicate review/callout quotes (exact + near-duplicates)
 		// ════════════════════════════════════════
 		if (Array.isArray(claudeOutput.callout_texts)) {
-			const normalized = claudeOutput.callout_texts.map((t: string) =>
-				t.toLowerCase().trim(),
-			);
-			const duplicates = normalized.filter(
-				(item: string, index: number) => normalized.indexOf(item) !== index,
-			);
-			if (duplicates.length > 0) {
-				issues.push(`Duplicate callout texts found: ${duplicates.join(', ')}`);
+			const original = claudeOutput.callout_texts;
+			const deduped = this.deduplicateCallouts(original);
+			if (deduped.length < original.length) {
+				issues.push(`Removed ${original.length - deduped.length} duplicate callout(s): had ${original.length}, now ${deduped.length}`);
+				claudeOutput.callout_texts = deduped;
 			}
 		}
 
@@ -154,6 +151,49 @@ export class PromptValidatorService {
 			issues,
 			cleanedPrompt: prompt,
 		};
+	}
+
+	/**
+	 * Deduplicate callout/review texts — removes exact and near-duplicates.
+	 * Two callouts are "near-duplicates" if they share >60% of their words.
+	 */
+	deduplicateCallouts(callouts: string[]): string[] {
+		if (!callouts || callouts.length <= 1) return callouts;
+
+		const unique: string[] = [];
+		const seenNormalized: string[] = [];
+
+		for (const callout of callouts) {
+			const normalized = callout.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+
+			// Skip exact duplicates
+			if (seenNormalized.includes(normalized)) continue;
+
+			// Check near-duplicates (>60% word overlap)
+			const words = new Set(normalized.split(/\s+/).filter(w => w.length > 0));
+			let isNearDuplicate = false;
+
+			for (const seen of seenNormalized) {
+				const seenWords = new Set(seen.split(/\s+/).filter(w => w.length > 0));
+				const intersection = [...words].filter(w => seenWords.has(w));
+				const similarity = intersection.length / Math.max(words.size, seenWords.size);
+				if (similarity > 0.6) {
+					isNearDuplicate = true;
+					break;
+				}
+			}
+
+			if (!isNearDuplicate) {
+				seenNormalized.push(normalized);
+				unique.push(callout);
+			}
+		}
+
+		if (unique.length < callouts.length) {
+			this.logger.warn(`Deduplicated callouts: ${callouts.length} → ${unique.length}`);
+		}
+
+		return unique;
 	}
 
 	/**

@@ -469,6 +469,14 @@ RULE 3: EVERY REVIEW/TESTIMONIAL MUST BE UNIQUE
 - NEVER repeat the same quote twice in one ad
 - NEVER use generic "Dog owner, 67" format for all reviews
 - Each review must have: unique quote text, unique reviewer name, unique detail
+- REVIEW TOPIC VARIETY — each review MUST cover a DIFFERENT benefit or angle:
+  * Review 1: one specific benefit (e.g., speed of results)
+  * Review 2: a DIFFERENT benefit (e.g., ease of use)
+  * Review 3: a DIFFERENT angle (e.g., emotional impact)
+  * Review 4: a DIFFERENT angle (e.g., value for money)
+  * Review 5: a DIFFERENT angle (e.g., recommendation to others)
+- Do NOT write reviews that say the same thing in different words
+- If the ad has N review cards, you MUST provide EXACTLY N unique callout_texts — no more, no fewer
 - Example of 5 UNIQUE reviews:
   * "My dog stopped barking at thunder!" — Sarah M., Golden Retriever owner
   * "Noticed a difference within 24 hours" — James K., verified buyer
@@ -645,7 +653,10 @@ RULE 1: NEVER PUT HEX CODES IN THE IMAGE PROMPT
 RULE 2: SPELL-CHECK ALL TEXT OBSESSIVELY
 - Double-check every word. Common AI mistakes: "chaging" (changing), "veriified" (verified), "reccommended" (recommended)
 
-RULE 3: EVERY REVIEW/TESTIMONIAL MUST BE UNIQUE — never repeat the same quote
+RULE 3: EVERY REVIEW/TESTIMONIAL MUST BE UNIQUE
+- Never repeat the same quote twice in one ad
+- Each review must cover a DIFFERENT benefit or angle — do NOT say the same thing in different words
+- If the ad has N review cards, provide EXACTLY N unique callout_texts
 
 RULE 4: PRODUCT PHOTO — The actual photo will be provided to Gemini. Describe WHERE to place it, do NOT describe what it looks like.
 

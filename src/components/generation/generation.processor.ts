@@ -385,17 +385,22 @@ export class GenerationProcessor extends WorkerHost {
 			lines.push(`CTA BUTTON TEXT (${wc} words): "${claudeResponse.cta_text}"`);
 		}
 		if (claudeResponse.callout_texts?.length > 0) {
+			const count = claudeResponse.callout_texts.length;
+			lines.push(`REVIEW/CALLOUT CARDS: Render EXACTLY ${count} cards — not more, not less.`);
+			lines.push(`Each card must have DIFFERENT text. Do NOT duplicate any card.`);
+			lines.push(`If the concept image shows more cards, render ONLY these ${count}:`);
+			lines.push('');
 			claudeResponse.callout_texts.forEach((callout, i) => {
 				const wc = this.countWords(callout);
 				if (wc > 6) {
 					// Long callouts get line-split formatting to prevent duplication
 					const splitLines = this.splitIntoRenderLines(callout, 5);
-					lines.push(`CALLOUT ${i + 1} (${wc} words, render on ${splitLines.length} lines):`);
+					lines.push(`CARD ${i + 1} of ${count} (${wc} words, render on ${splitLines.length} lines):`);
 					splitLines.forEach((line, j) => {
 						lines.push(`  Line ${j + 1}: "${line}"`);
 					});
 				} else {
-					lines.push(`CALLOUT ${i + 1} TEXT (${wc} words): "${callout}"`);
+					lines.push(`CARD ${i + 1} of ${count} (${wc} words): "${callout}"`);
 				}
 			});
 		}
@@ -405,6 +410,7 @@ export class GenerationProcessor extends WorkerHost {
 		lines.push('Word counts are provided — the rendered text must have EXACTLY that many words, no more, no fewer.');
 		lines.push('If you cannot render a word correctly, OMIT the word entirely rather than misspell it.');
 		lines.push('NEVER duplicate any word — "both both", "my my", "the the" are WRONG.');
+		lines.push('NEVER duplicate any review card — each card must have unique text.');
 		lines.push('═══════════════════════════════════');
 		lines.push('');
 
