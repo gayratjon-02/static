@@ -1,0 +1,29 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches: [ master ]
+
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - name: Deploy to VPS
+      uses: appleboy/ssh-action@v1.2.0
+      with:
+        host: ${{ secrets.VPS_HOST }}
+        username: ${{ secrets.VPS_USER }}
+        key: ${{ secrets.VPS_SSH_KEY }}
+        port: ${{ secrets.VPS_PORT }}
+        command_timeout: 5m
+        script: |
+          cd ${{ secrets.VPS_DEPLOY_PATH }}
+          git fetch origin master
+          git reset --hard origin/master
+          chmod +x deploy.sh
+          bash deploy.sh
