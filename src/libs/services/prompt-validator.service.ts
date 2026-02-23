@@ -258,6 +258,84 @@ export class PromptValidatorService {
 		};
 	}
 
+	/**
+	 * Enforce a strict word limit on review/callout texts.
+	 * Gemini renders 4-5 word phrases accurately; longer text causes garbled trailing words.
+	 */
+	enforceWordLimit(callouts: string[], maxWords: number = 5): string[] {
+		return callouts.map(callout => {
+			const words = callout.trim().split(/\s+/);
+			if (words.length <= maxWords) return callout;
+			const truncated = words.slice(0, maxWords).join(' ');
+			this.logger.warn(
+				`Review truncated from ${words.length} to ${maxWords} words: "${callout}" → "${truncated}"`,
+			);
+			return truncated;
+		});
+	}
+
+	/**
+	 * Replace words with double letters (hard for image models to spell) with simpler synonyms.
+	 * Preserves original capitalization.
+	 */
+	simplifyDifficultWords(text: string): string {
+		const replacements: Record<string, string> = {
+			'effortless': 'easy',
+			'embarrassing': 'stressful',
+			'aggressive': 'intense',
+			'professional': 'expert',
+			'recommended': 'approved',
+			'difference': 'change',
+			'happiness': 'joy',
+			'successful': 'proven',
+			'comfortable': 'cozy',
+			'immediately': 'fast',
+			'unnecessary': 'excess',
+			'accommodate': 'fit',
+			'occurrence': 'event',
+			'assessment': 'review',
+			'accessible': 'available',
+			'addressing': 'fixing',
+			'aggression': 'stress',
+			'irritability': 'tension',
+		};
+
+		let result = text;
+		for (const [difficult, simple] of Object.entries(replacements)) {
+			const regex = new RegExp(`\\b${difficult}\\b`, 'gi');
+			result = result.replace(regex, (match: string) => {
+				if (match[0] === match[0].toUpperCase()) {
+					return simple.charAt(0).toUpperCase() + simple.slice(1);
+				}
+				return simple;
+			});
+		}
+
+		if (result !== text) {
+			this.logger.warn(`Simplified difficult words: "${text}" → "${result}"`);
+		}
+		return result;
+	}
+
+	/**
+	 * Add character-by-character spelling hints for words 7+ characters.
+	 * Helps Gemini render longer words accurately.
+	 */
+	addSpellingHints(text: string): string {
+		const words = text.split(/\s+/);
+		const hints: string[] = [];
+
+		for (const word of words) {
+			const cleanWord = word.replace(/[^a-zA-Z]/g, '');
+			if (cleanWord.length >= 7) {
+				hints.push(`"${cleanWord}" is spelled: ${cleanWord.split('').join('-')}`);
+			}
+		}
+
+		if (hints.length === 0) return '';
+		return `\nSPELLING HINTS:\n${hints.join('\n')}`;
+	}
+
 	private hexToName(hex: string): string {
 		const colorMap: Record<string, string> = {
 			'ffffff': 'pure white',

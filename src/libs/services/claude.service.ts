@@ -508,13 +508,24 @@ When the brand has specific colors, ALWAYS convert to descriptive names:
 RULE 7: KEEP TEXT SHORT — SHORTER TEXT = FEWER SPELLING ERRORS IN IMAGES
 - Headlines: MAX 6 words. Use simple, everyday English words.
 - Subheadlines: MAX 10 words.
-- Callout texts: MAX 3 words each. Single-word or two-word callouts preferred.
+- Callout texts / review cards: MAXIMUM 5 words each. This is a HARD LIMIT, not a suggestion.
+  Count the words before finalizing each review/callout.
+  GOOD (5 words or fewer):
+    "No more anxiety barking" (4 words)
+    "Sleeps through storms now" (4 words)
+    "Easy plug and play" (4 words)
+    "Finally peaceful nights" (3 words)
+  BAD (too many words — WILL cause garbled rendering):
+    "Easy to use daily for my dogs" (8 words — TOO LONG)
+    "My dog sleeps through the night now" (8 words — TOO LONG)
+  If a review needs more than 5 words, shorten it:
+    "My dog finally sleeps through the night" → "Finally sleeps all night" (4 words)
+    "No more embarrassing barking at guests" → "No more guest barking" (4 words)
 - CTA button: MAX 3 words (e.g. "Shop Now", "Try Free", "Get Yours").
-- Testimonials/reviews: MAX 15 words each.
 - ALWAYS prefer simple, commonly-spelled English words.
-- AVOID complex, technical, or unusual words that AI image generators struggle to spell.
+- AVOID words with double letters that AI struggles to spell: "effortless" → "easy", "professional" → "expert", "recommended" → "approved", "comfortable" → "cozy", "immediately" → "fast", "aggressive" → "intense"
 - GOOD words: "Natural", "Proven", "Fast Relief", "Lab Tested", "Pure", "Safe"
-- BAD words: "Pharmaceutical", "Anxiolytic", "Dermatologically", "Pheromones"
+- BAD words: "Pharmaceutical", "Anxiolytic", "Dermatologically", "Pheromones", "Effortless", "Immediately"
 
 RULE 8: NEVER USE PIXEL DIMENSIONS OR CSS VALUES IN gemini_image_prompt
 - NEVER: "font-size: 48px", "margin 20px", "shadow of 115px", "border-radius: 10px"
@@ -666,9 +677,9 @@ RULE 6: COLOR DESCRIPTIONS — Always convert hex to descriptive names in the ge
 
 RULE 7: KEEP TEXT SHORT — shorter text = fewer spelling errors in images.
 - Headlines: MAX 6 words, simple common words only.
-- Callouts: MAX 3 words each.
+- Callouts/review cards: MAXIMUM 5 words each (HARD LIMIT — longer text causes garbled rendering).
 - CTA: MAX 3 words.
-- Avoid complex/unusual words that are hard to spell.
+- Avoid words with double letters: use "easy" not "effortless", "expert" not "professional", "approved" not "recommended".
 
 RULE 8: NEVER USE PIXEL DIMENSIONS OR CSS VALUES IN gemini_image_prompt
 - NEVER: "font-size: 48px", "margin 20px", "shadow of 115px", "border-radius: 10px"

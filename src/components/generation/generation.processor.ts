@@ -140,13 +140,35 @@ export class GenerationProcessor extends WorkerHost {
 				this.logger.warn(`Generation ${generated_ad_id}: Concept content leak detected: ${relevanceCheck.warnings.join('; ')}`);
 			}
 
+			// ✅ Simplify difficult words (double-letter words → simpler synonyms)
+			// Applied to all text fields before Gemini sees them
+			if (claudeResponse.headline) {
+				claudeResponse.headline = this.promptValidator.simplifyDifficultWords(claudeResponse.headline);
+			}
+			if (claudeResponse.subheadline) {
+				claudeResponse.subheadline = this.promptValidator.simplifyDifficultWords(claudeResponse.subheadline);
+			}
+			if (claudeResponse.cta_text) {
+				claudeResponse.cta_text = this.promptValidator.simplifyDifficultWords(claudeResponse.cta_text);
+			}
+			if (Array.isArray(claudeResponse.callout_texts)) {
+				claudeResponse.callout_texts = claudeResponse.callout_texts.map(
+					(t: string) => this.promptValidator.simplifyDifficultWords(t),
+				);
+				// ✅ Enforce strict 5-word limit on review cards (prevents garbled trailing words)
+				claudeResponse.callout_texts = this.promptValidator.enforceWordLimit(claudeResponse.callout_texts, 5);
+			}
+
 			// Use cleaned prompt (hex codes stripped, typos fixed)
+			// Simplify difficult words in the Gemini prompt itself
+			let cleanedPrompt = this.promptValidator.simplifyDifficultWords(validation.cleanedPrompt);
+
 			// Prepend brand name override — ensures Gemini uses the actual brand,
 			// not any brand name visible in concept reference images
 			const brandOverride = `═══ HIGHEST PRIORITY — BRAND NAME ═══\nTHE BRAND NAME IS: "${brand.name}"\nSPELL IT: ${brand.name.split('').join(' - ')}\n\nRULES:\n- Display "${brand.name}" as the brand name in the ad — this is NOT negotiable\n- The brand logo text must read "${brand.name}" — NOT any text from the logo image\n- If the logo image shows "GlowVita", "PREMIUM SKINCARE", or ANY other brand name — IGNORE IT\n- The logo image may contain a placeholder brand name — always override with "${brand.name}"\n- If ANY reference image shows a different brand name, IGNORE it and use "${brand.name}"\n═══════════════════════════════════════\n\n`;
 			const productContext = this.buildProductContext(brand, product);
 			const textSpec = this.buildTextRenderingSpec(claudeResponse);
-			const basePrompt = brandOverride + productContext + textSpec + validation.cleanedPrompt;
+			const basePrompt = brandOverride + productContext + textSpec + cleanedPrompt;
 
 			// Build brand color description for ratio-specific prompts
 			const brandColorDesc = this.buildBrandColorDescription(brand);
@@ -405,6 +427,18 @@ export class GenerationProcessor extends WorkerHost {
 			});
 		}
 
+		// Collect spelling hints for all text fields (words 7+ characters)
+		const allTextForHints = [
+			claudeResponse.headline,
+			claudeResponse.subheadline,
+			claudeResponse.cta_text,
+			...(claudeResponse.callout_texts || []),
+		].filter(Boolean).join(' ');
+		const spellingHints = this.promptValidator.addSpellingHints(allTextForHints);
+		if (spellingHints) {
+			lines.push(spellingHints);
+		}
+
 		lines.push('');
 		lines.push('CRITICAL: Every text element above MUST be spelled EXACTLY as shown in the quotes.');
 		lines.push('Word counts are provided — the rendered text must have EXACTLY that many words, no more, no fewer.');
@@ -543,13 +577,31 @@ export class GenerationProcessor extends WorkerHost {
 				}
 			}
 
+			// ✅ Simplify difficult words + enforce word limit (fix-errors flow)
+			if (claudeResponse.headline) {
+				claudeResponse.headline = this.promptValidator.simplifyDifficultWords(claudeResponse.headline);
+			}
+			if (claudeResponse.subheadline) {
+				claudeResponse.subheadline = this.promptValidator.simplifyDifficultWords(claudeResponse.subheadline);
+			}
+			if (claudeResponse.cta_text) {
+				claudeResponse.cta_text = this.promptValidator.simplifyDifficultWords(claudeResponse.cta_text);
+			}
+			if (Array.isArray(claudeResponse.callout_texts)) {
+				claudeResponse.callout_texts = claudeResponse.callout_texts.map(
+					(t: string) => this.promptValidator.simplifyDifficultWords(t),
+				);
+				claudeResponse.callout_texts = this.promptValidator.enforceWordLimit(claudeResponse.callout_texts, 5);
+			}
+			let cleanedPromptFix = this.promptValidator.simplifyDifficultWords(validation.cleanedPrompt);
+
 			// Build brand color description for prompts
 			const brandColorDesc = this.buildBrandColorDescription(brandSnapshot as Brand);
 			const brandName = (brandSnapshot as any).name || '';
 			const brandOverrideFix = brandName ? `═══ HIGHEST PRIORITY — BRAND NAME ═══\nTHE BRAND NAME IS: "${brandName}"\nSPELL IT: ${brandName.split('').join(' - ')}\n- Display "${brandName}" as the brand name — NOT any text from the logo image\n- If the logo image shows a different brand name — IGNORE IT, use "${brandName}"\n═══════════════════════════════════════\n\n` : '';
 			const productContext = this.buildProductContext(brandSnapshot as Brand, productSnapshot as Product);
 			const textSpec = this.buildTextRenderingSpec(claudeResponse);
-			const basePrompt = brandOverrideFix + productContext + textSpec + validation.cleanedPrompt;
+			const basePrompt = brandOverrideFix + productContext + textSpec + cleanedPromptFix;
 
 			// Generate all 3 ratios with retry logic
 			const [result1x1, result9x16, result16x9] = await Promise.all([
