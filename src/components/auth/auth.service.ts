@@ -254,7 +254,7 @@ export class AuthService {
 	/** create JWT token */
 	public createToken(payload: { id: string;[key: string]: any }): string {
 		const secret = this.configService.get<string>('JWT_SECRET');
-		return jwt.sign(payload, secret, { expiresIn: '30d' });
+		return jwt.sign(payload, secret, { expiresIn: '7d' });
 	}
 
 	/** verify JWT token and return user data */

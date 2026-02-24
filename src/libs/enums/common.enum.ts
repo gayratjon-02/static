@@ -10,6 +10,7 @@ export enum Message {
 	BAD_REQUEST = 'Bad Request',
 
 	// Auth
+	EMAIL_IS_REQUIRED = 'Email is required!',
 	NOT_AUTHENTICATED = 'You are not authenticated, please login first!',
 	TOKEN_NOT_EXIST = 'Bearer Token is not provided!',
 	TOKEN_EXPIRED = 'Token has expired!',

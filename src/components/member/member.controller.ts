@@ -1,18 +1,30 @@
-import { Body, Controller, Get, Param, Post, Query, UnauthorizedException, UseGuards, BadRequestException, Headers } from '@nestjs/common';
+import {
+	Body,
+	Controller,
+	Get,
+	Param,
+	Post,
+	Query,
+	UnauthorizedException,
+	UseGuards,
+	BadRequestException,
+	Headers,
+} from '@nestjs/common';
 import { MemberService } from './member.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
 import { LoginDto } from 'src/libs/dto/member/login.dto';
 import { AdminSignupDto } from '../../libs/dto/admin/admin-signup.dto';
 import { AdminLoginDto } from '../../libs/dto/admin/admin-login.dto';
 import { AuthResponse, Member, MemberResponse } from '../../libs/types/member/member.type';
-import { AdminAuthResponse } from '../../libs/types/admin/admin.type';
+import { AdminAuthResponse, AdminMember } from '../../libs/types/admin/admin.type';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
-import { ForgetPasswordDto, UpdateMemberDto } from 'src/libs/dto/member/update-member.dto';
+import { ForgetPasswordDto, ResetPasswordDto, UpdateMemberDto } from 'src/libs/dto/member/update-member.dto';
+import { Message } from 'src/libs/enums/common.enum';
 
 @Controller('member')
 export class MemberController {
-	constructor(private readonly memberService: MemberService) { }
+	constructor(private readonly memberService: MemberService) {}
 
 	// test API
 	@Get('test')
@@ -49,22 +61,23 @@ export class MemberController {
 	// Stateless Forgot Password (public)
 	@Post('forgot-password-flow')
 	public async requestPasswordReset(@Body('email') email: string): Promise<{ success: boolean; message: string }> {
-		if (!email) throw new BadRequestException('Email is required');
+		console.log('forgot-password-flow');
+		if (!email) throw new BadRequestException(Message.EMAIL_IS_REQUIRED);
 		return this.memberService.requestPasswordReset(email);
 	}
 
 	// Stateless Reset Password (public)
 	@Post('reset-password-flow')
-	public async executePasswordReset(@Body() input: any): Promise<{ success: boolean; message: string }> {
-		if (!input.token || !input.password) {
-			throw new BadRequestException('Token and password are required');
-		}
+	public async executePasswordReset(@Body() input: ResetPasswordDto): Promise<{ success: boolean; message: string }> {
 		return this.memberService.executePasswordReset(input.token, input.password);
 	}
 
 	// admin signup API — only existing super_admin can create new admins (or anyone if 0 admins exist)
 	@Post('adminSignup')
-	public async adminSignup(@Body() input: AdminSignupDto, @Headers('authorization') authHeader: string): Promise<AdminAuthResponse> {
+	public async adminSignup(
+		@Body() input: AdminSignupDto,
+		@Headers('authorization') authHeader: string,
+	): Promise<AdminAuthResponse> {
 		return this.memberService.adminSignupWithCheck(input, authHeader);
 	}
 
@@ -115,7 +128,7 @@ export class MemberController {
 	@UseGuards(AuthGuard)
 	@Get('adminUsers')
 	public async adminGetUsers(
-		@AuthMember() authMember: any,
+		@AuthMember() authMember: AdminMember,
 		@Query('search') search?: string,
 		@Query('tier') tier?: string,
 		@Query('status') status?: string,
@@ -134,20 +147,14 @@ export class MemberController {
 
 	@UseGuards(AuthGuard)
 	@Post('adminBlock/:id')
-	public async adminBlockUser(
-		@Param('id') id: string,
-		@AuthMember() authMember: any,
-	) {
+	public async adminBlockUser(@Param('id') id: string, @AuthMember() authMember: any) {
 		if (!authMember?.admin_role) throw new UnauthorizedException('Admin access required');
 		return this.memberService.adminBlockUser(id);
 	}
 
 	@UseGuards(AuthGuard)
 	@Post('adminUnblock/:id')
-	public async adminUnblockUser(
-		@Param('id') id: string,
-		@AuthMember() authMember: any,
-	) {
+	public async adminUnblockUser(@Param('id') id: string, @AuthMember() authMember: any) {
 		if (!authMember?.admin_role) throw new UnauthorizedException('Admin access required');
 		return this.memberService.adminUnblockUser(id);
 	}

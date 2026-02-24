@@ -1,11 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { ValidationPipe } from '@nestjs/common';
-import { LoggingInterceptor } from './libs/interceptor/Logging.interceptor';
-import { ValidationExceptionFilter } from './libs/filters/validation-exception.filter';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import helmet from 'helmet';
-import { SanitizePipe } from './libs/pipes/sanitize.pipe';
 
 async function bootstrap() {
 	const app = await NestFactory.create<NestExpressApplication>(AppModule, {
@@ -40,18 +36,6 @@ async function bootstrap() {
 			xssFilter: true,
 		}),
 	);
-
-	// ── Global validation ──────────────────────────────────────────────────
-	app.useGlobalPipes(
-		new SanitizePipe(),              // strip HTML from all string body fields
-		new ValidationPipe({
-			whitelist: true,             // strip unknown properties
-			forbidNonWhitelisted: true,  // reject requests with extra fields
-			transform: true,
-		}),
-	);
-	app.useGlobalFilters(new ValidationExceptionFilter());
-	app.useGlobalInterceptors(new LoggingInterceptor());
 
 	// ── Body size limits ───────────────────────────────────────────────────
 	app.useBodyParser('json', { limit: '10mb' });

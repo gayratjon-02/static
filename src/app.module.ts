@@ -1,9 +1,9 @@
-import { Module } from '@nestjs/common';
+import { Module, ValidationPipe } from '@nestjs/common';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_GUARD, APP_PIPE, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { DatabaseModule } from './database/database.module';
 import { AuthModule } from './components/auth/auth.module';
 import { MemberModule } from './components/member/member.module';
@@ -16,16 +16,42 @@ import { S3Module } from './components/s3/s3.module';
 import { EmailModule } from './components/email/email.module';
 import { CanvaModule } from './components/canva/canva.module';
 import { PromptTemplatesModule } from './components/prompt-templates/prompt-templates.module';
+import { SanitizePipe } from './libs/pipes/sanitize.pipe';
+import { ValidationExceptionFilter } from './libs/filters/validation-exception.filter';
+import { LoggingInterceptor } from './libs/interceptor/Logging.interceptor';
 
 @Module({
 	controllers: [AppController],
 	providers: [
 		AppService,
 		// ── Global rate limiter ─────────────────────────────────────────────
-		// Applies to ALL routes unless overridden with @Throttle({ default: { ... } })
 		{
 			provide: APP_GUARD,
 			useClass: ThrottlerGuard,
+		},
+		// ── Global pipes ────────────────────────────────────────────────────
+		{
+			provide: APP_PIPE,
+			useClass: SanitizePipe,
+		},
+		{
+			provide: APP_PIPE,
+			useFactory: () =>
+				new ValidationPipe({
+					whitelist: true,
+					forbidNonWhitelisted: true,
+					transform: true,
+				}),
+		},
+		// ── Global filter ───────────────────────────────────────────────────
+		{
+			provide: APP_FILTER,
+			useClass: ValidationExceptionFilter,
+		},
+		// ── Global interceptor ──────────────────────────────────────────────
+		{
+			provide: APP_INTERCEPTOR,
+			useClass: LoggingInterceptor,
 		},
 	],
 	imports: [
