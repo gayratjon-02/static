@@ -64,9 +64,13 @@ export class BrandController {
 	): Promise<{ logo_url: string }> {
 		if (!file) throw new BadRequestException(Message.UPLOAD_FAILED);
 
-		const key = `brands/${authMember._id}/${uuidv4()}${extname(file.originalname)}`;
-		const logoUrl = await this.s3Service.upload(file.buffer, key, file.mimetype);
-		return { logo_url: logoUrl };
+		try {
+			const key = `brands/${authMember._id}/${uuidv4()}${extname(file.originalname)}`;
+			const logoUrl = await this.s3Service.upload(file.buffer, key, file.mimetype);
+			return { logo_url: logoUrl };
+		} catch {
+			throw new BadRequestException(Message.UPLOAD_FAILED);
+		}
 	}
 
 	@UseGuards(AuthGuard)
