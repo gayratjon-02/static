@@ -9,8 +9,7 @@ import { AdminAuthResponse } from '../../libs/types/admin/admin.type';
 import { ForgetPasswordDto, UpdateMemberDto } from '../../libs/dto/member/update-member.dto';
 import { T } from 'src/libs/types/common';
 import { DatabaseService } from '../../database/database.service';
-import { MemberStatus } from '../../libs/enums/common.enum';
-import { Message } from '../../libs/enums/common.enum';
+import { AdminRole, MemberStatus, Message } from '../../libs/enums/common.enum';
 import * as bcrypt from 'bcrypt';
 import * as jwt from 'jsonwebtoken';
 import { EmailService } from '../email/email.service';
@@ -38,30 +37,26 @@ export class MemberService {
 		return this.authService.login(input);
 	}
 
-	// admin signup method with bypass for the first admin
-	public async adminSignupWithCheck(input: AdminSignupDto, authHeader: string): Promise<AdminAuthResponse> {
-		const { count, error: countError } = await this.databaseService.client
+	async adminSignupWithCheck(input: AdminSignupDto, authHeader: string): Promise<AdminAuthResponse> {
+		const { count } = await this.databaseService.client
 			.from('admin_users')
 			.select('*', { count: 'exact', head: true });
 
-		// Protect against literal "null" values sent from localStorage
-		const isHeaderMissing = !authHeader || authHeader === 'Bearer null' || authHeader === 'Bearer undefined';
-
-		// If there is at least 1 admin, require super_admin authentication
-		if (count && count > 0) {
-			if (isHeaderMissing) {
-				throw new UnauthorizedException('Missing token. Only super_admin can create new admin accounts');
-			}
-			const token = authHeader.split(' ')[1];
-			if (!token || token === 'null' || token === 'undefined') throw new UnauthorizedException('Invalid token format');
-
-			const admin = await this.authService.verifyAdminToken(token);
-			if (!admin || admin.admin_role !== 'super_admin') {
-				throw new UnauthorizedException('Only super_admin can create new admin accounts');
-			}
+		if (!count) {
+			return this.authService.adminSignup(input);
 		}
 
-		return await this.authService.adminSignup(input);
+		const token = authHeader?.split(' ')[1];
+		if (!token || token === 'null' || token === 'undefined') {
+			throw new UnauthorizedException(Message.TOKEN_NOT_EXIST);
+		}
+
+		const admin = await this.authService.verifyAdminToken(token);
+		if (admin?.admin_role !== AdminRole.SUPER_ADMIN) {
+			throw new UnauthorizedException(Message.NOT_ALLOWED_REQUEST);
+		}
+
+		return this.authService.adminSignup(input);
 	}
 
 	// admin login method
