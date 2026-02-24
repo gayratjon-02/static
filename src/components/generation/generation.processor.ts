@@ -186,13 +186,14 @@ export class GenerationProcessor extends WorkerHost {
 			const referenceImages = [product.photo_url, brand.logo_url, concept.image_url].filter(Boolean);
 			this.logger.log(`Sending ${referenceImages.length} reference images to Gemini (product: ${!!product.photo_url}, logo: ${!!brand.logo_url}, concept: ${!!concept.image_url})`);
 
-			// Analyze product images with Claude Vision (once, shared across all 3 ratios)
-			let productDescription = '';
-			if (referenceImages.length > 0) {
+			// Use pre-computed product description from batch (avoids 6× Claude calls)
+			let productDescription = job.data.product_description || '';
+			if (!productDescription && referenceImages.length > 0) {
 				try {
 					productDescription = await this.claudeService.analyzeProductImages(referenceImages);
-				} catch (err) {
-					this.logger.warn(`Product image analysis failed: ${err.message} — proceeding without analysis`);
+				} catch (err: unknown) {
+					const errMsg = err instanceof Error ? err.message : String(err);
+					this.logger.warn(`Product image analysis failed: ${errMsg} — proceeding without analysis`);
 				}
 			}
 

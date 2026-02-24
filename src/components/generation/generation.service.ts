@@ -10,7 +10,7 @@ import { FixErrorsDto } from '../../libs/dto/generation/fix-errors.dto';
 import { Message } from '../../libs/enums/common.enum';
 import { GenerationStatus } from '../../libs/enums/generation/generation.enum';
 import { Member } from '../../libs/types/member/member.type';
-import { Generation, GenerationJobData, GenerationStatusResponse, GenerationResultsResponse, FixErrorsJobData, ExportRatiosResponse } from '../../libs/types/generation/generation.type';
+import { Generation, GenerationJobData, GenerationStatusResponse, GenerationResultsResponse, FixErrorsJobData, ExportRatiosResponse, ClaudeResponseJson } from '../../libs/types/generation/generation.type';
 import { SystemConfigService } from '../system-config/system-config.service';
 
 @Injectable()
@@ -144,33 +144,48 @@ export class GenerationService {
 				this.databaseService.client.from('ad_concepts').select('*').eq('_id', concept_id).single(),
 			]);
 
-			let claudeVariations: any[] = [];
+			let claudeVariations: ClaudeResponseJson[] = [];
+			let productDescription = '';
+
+			const referenceImages = [
+				productData.data?.photo_url,
+				brandData.data?.logo_url,
+				conceptData.data?.image_url,
+			].filter(Boolean) as string[];
+
 			try {
-				this.logger.log(`Calling Claude for 6 variations (single request)...`);
-				const claudeResult = await this.claudeService.generate6Variations(
-					brandData.data,
-					productData.data,
-					conceptData.data,
-					important_notes || '',
-				);
+				this.logger.log(`Calling Claude for 6 variations + product analysis (batch-level, single pass)...`);
+
+				const [claudeResult, imageAnalysis] = await Promise.all([
+					this.claudeService.generate6Variations(
+						brandData.data,
+						productData.data,
+						conceptData.data,
+						important_notes || '',
+					),
+					referenceImages.length > 0
+						? this.claudeService.analyzeProductImages(referenceImages)
+						: Promise.resolve(''),
+				]);
+
 				claudeVariations = claudeResult.variations;
-				this.logger.log(`Claude returned ${claudeVariations.length} variations`);
+				productDescription = imageAnalysis;
+				this.logger.log(`Claude returned ${claudeVariations.length} variations + ${productDescription.length} chars product analysis`);
 
 				if (claudeResult.claude_usage) {
 					const { input_tokens, output_tokens } = claudeResult.claude_usage;
-					// Claude Sonnet 4.5: $3/M input + $15/M output tokens
 					const claudeCost = (input_tokens * 3 + output_tokens * 15) / 1_000_000;
-					// Imagen 3.0: ~$0.04 per image — 6 variations × 3 ratios = 18 images max
 					const imagenEstimate = 6 * 3 * 0.04;
 					this.logger.log(
-						`💰 Batch ${batchId} cost estimate — Claude: $${claudeCost.toFixed(4)} (${input_tokens}in + ${output_tokens}out tokens) | Imagen: ~$${imagenEstimate.toFixed(2)} | Total: ~$${(claudeCost + imagenEstimate).toFixed(2)}`,
+						`Batch ${batchId} cost estimate — Claude: $${claudeCost.toFixed(4)} (${input_tokens}in + ${output_tokens}out tokens) | Imagen: ~$${imagenEstimate.toFixed(2)} | Total: ~$${(claudeCost + imagenEstimate).toFixed(2)}`,
 					);
 				}
-			} catch (claudeErr) {
-				this.logger.warn(`Claude pre-generation failed, jobs will call Claude individually: ${claudeErr.message}`);
+			} catch (claudeErr: unknown) {
+				const errMsg = claudeErr instanceof Error ? claudeErr.message : String(claudeErr);
+				this.logger.warn(`Claude pre-generation failed, jobs will call Claude individually: ${errMsg}`);
 			}
 
-			// 8. Add jobs to BullMQ queue (6 jobs, each with Claude variation)
+			// 8. Add jobs to BullMQ queue (6 jobs, each with Claude variation + shared product description)
 			const jobs = generatedAds.map((ad, i) => ({
 				name: 'create-ad',
 				data: {
@@ -183,6 +198,7 @@ export class GenerationService {
 					batch_id: batchId,
 					variation_index: i,
 					claude_variation: claudeVariations[i] || undefined,
+					product_description: productDescription || undefined,
 				},
 				opts: {
 					removeOnComplete: true,

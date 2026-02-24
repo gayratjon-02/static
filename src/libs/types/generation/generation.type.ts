@@ -135,6 +135,7 @@ export interface GenerationJobData {
 	batch_id?: string;
 	variation_index?: number;
 	claude_variation?: ClaudeResponseJson;
+	product_description?: string;
 }
 
 /** BullMQ fix-errors job data */
