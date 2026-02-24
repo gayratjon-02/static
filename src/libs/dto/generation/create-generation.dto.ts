@@ -15,6 +15,6 @@ export class CreateGenerationDto {
 
 	@IsString()
 	@IsOptional()
-	@MaxLength(2000)
+	@MaxLength(500)
 	important_notes?: string;
 }
