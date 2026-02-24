@@ -585,50 +585,61 @@ export class BillingService {
 	// ── EVENT 1: checkout.session.completed ──────
 	private async onCheckoutCompleted(session: Stripe.Checkout.Session): Promise<void> {
 		const userId = session.metadata?.user_id;
-		const tier = session.metadata?.tier;
-		const billingInterval = session.metadata?.billing_interval || 'monthly';
+		const addonType = session.metadata?.addon_type;
 
-		console.log('\n🎉 CHECKOUT COMPLETED');
+		console.log('BillingService: onCheckoutCompleted');
 		console.log('  session.id:', session.id);
 		console.log('  userId:', userId);
-		console.log('  tier:', tier);
-		console.log('  billingInterval:', billingInterval);
-		console.log('  session.customer:', session.customer);
-		console.log('  session.subscription:', session.subscription);
+		console.log('  addonType:', addonType);
 		console.log('  session.metadata:', JSON.stringify(session.metadata));
 
-		if (!userId || !tier) {
-			console.error('  ❌ METADATA MISSING!');
-			this.logger.error('Checkout: metadata missing');
+		if (!userId) {
+			console.error('  user_id missing in metadata');
 			return;
 		}
 
-		if (session.metadata?.addon_type === 'credits_100') {
-			console.log('  → Addon checkout, skipping subscription logic');
-			this.logger.log(`Addon checkout completed: ${session.id}`);
+		if (addonType === 'credits_100') {
+			console.log('  → Credit addon checkout');
 			return;
 		}
 
-		if (session.metadata?.addon_type === 'canva_template') {
-			console.log('  → Canva Template checkout, creating Canva order');
-			const adId = session.metadata.ad_id;
+		if (addonType === 'canva_template') {
+			console.log('  → Canva Template checkout');
+			const adId = session.metadata?.ad_id;
+			const paymentIntentId = typeof session.payment_intent === 'string'
+				? session.payment_intent
+				: session.payment_intent?.id;
+			const pricePaid = session.amount_total ?? 490;
+
+			if (!adId || !paymentIntentId) {
+				console.error('  ad_id or payment_intent missing');
+				return;
+			}
+
 			try {
-				// Determine price paid using amount_total
-				const pricePaid = session.amount_total || 490;
 				await this.canvaService.createOrder(
 					userId,
-					session.customer_details?.email || '',
-					session.customer_details?.name || null,
+					session.customer_details?.email ?? '',
+					session.customer_details?.name ?? null,
 					{
 						generated_ad_id: adId,
-						stripe_payment_id: session.payment_intent as string,
+						stripe_payment_id: paymentIntentId,
 						price_paid_cents: pricePaid,
 					},
 				);
-				this.logger.log(`Canva order fulfilled via webhook for session: ${session.id}`);
-			} catch (err: any) {
-				this.logger.error(`Failed to create Canva order from webhook: ${err.message}`);
+				console.log('  Canva order created for session:', session.id);
+			} catch (err) {
+				const e = err as Error;
+				console.error('  Failed to create Canva order:', e.message);
 			}
+			return;
+		}
+
+		const tier = session.metadata?.tier;
+		const billingInterval = session.metadata?.billing_interval ?? 'monthly';
+
+		if (!tier) {
+			console.error('  tier missing in metadata for subscription checkout');
 			return;
 		}
 
