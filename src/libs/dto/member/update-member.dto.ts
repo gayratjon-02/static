@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, MaxLength, MinLength } from 'class-validator';
+import { IsEmail, IsString, IsNotEmpty, IsOptional, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateMemberDto {
 	@IsString()
@@ -40,4 +40,10 @@ export class ResetPasswordDto {
 	@MaxLength(50)
 	@IsNotEmpty()
 	password: string;
+}
+
+export class RequestPasswordResetDto {
+	@IsEmail()
+	@IsNotEmpty()
+	email: string;
 }
