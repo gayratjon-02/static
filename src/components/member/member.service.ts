@@ -32,18 +32,22 @@ export class MemberService {
 	// ── AUTH DELEGATION ──────────────────────────────────────────
 
 	async signup(input: SignupDto): Promise<AuthResponse> {
+		console.log('MemberService: signup');
 		return this.authService.signup(input);
 	}
 
 	async login(input: LoginDto): Promise<AuthResponse> {
+		console.log('MemberService: login');
 		return this.authService.login(input);
 	}
 
 	async adminLogin(input: AdminLoginDto): Promise<AdminAuthResponse> {
+		console.log('MemberService: adminLogin');
 		return this.authService.adminLogin(input);
 	}
 
 	async adminSignupWithCheck(input: AdminSignupDto, authHeader: string): Promise<AdminAuthResponse> {
+		console.log('MemberService: adminSignup');
 		const { count } = await this.databaseService.client
 			.from('admin_users')
 			.select('*', { count: 'exact', head: true });
@@ -68,6 +72,7 @@ export class MemberService {
 	// ── PASSWORD RESET (PUBLIC) ──────────────────────────────────
 
 	async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+		console.log('MemberService: forgot-password-flow');
 		const SAFE_RESPONSE = { success: true, message: Message.PASSWORD_RESET_EMAIL_SENT };
 
 		const { data: user } = await this.databaseService.client
@@ -90,6 +95,7 @@ export class MemberService {
 	}
 
 	async executePasswordReset(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+		console.log('MemberService: reset-password-flow');
 		try {
 			const secret = this.configService.get<string>('JWT_SECRET');
 			const decoded = jwt.verify(token, secret!) as ResetTokenPayload;
@@ -119,6 +125,7 @@ export class MemberService {
 	// ── AUTHENTICATED USER ───────────────────────────────────────
 
 	async forgetPassword(authMember: Member, input: ForgetPasswordDto): Promise<MemberResponse> {
+		console.log('MemberService: forgetPassword');
 		const { password, confirm_password } = input;
 
 		if (password !== confirm_password) {
@@ -154,6 +161,7 @@ export class MemberService {
 	}
 
 	async getMember(authMember: Member): Promise<MemberResponse> {
+		console.log('MemberService: getMember');
 		const { data, error } = await this.databaseService.client
 			.from('users')
 			.select('*')
@@ -168,6 +176,7 @@ export class MemberService {
 	}
 
 	async updateMember(input: UpdateMemberDto, authMember: Member): Promise<MemberResponse> {
+		console.log('MemberService: updateMember');
 		const updateData: Record<string, string | Date> = {};
 
 		if (input.full_name) updateData.full_name = input.full_name;
@@ -195,6 +204,7 @@ export class MemberService {
 	}
 
 	async deleteMember(authMember: Member): Promise<MemberResponse> {
+		console.log('MemberService: deleteMember');
 		const { data, error } = await this.databaseService.client
 			.from('users')
 			.update({ member_status: MemberStatus.DELETED, updated_at: new Date() })
@@ -210,6 +220,7 @@ export class MemberService {
 	}
 
 	async getUsage(authMember: Member) {
+		console.log('MemberService: getUsage');
 		const [userRes, generatedRes, savedRes] = await Promise.all([
 			this.databaseService.client
 				.from('users')
@@ -244,6 +255,7 @@ export class MemberService {
 	}
 
 	async getActivity(authMember: Member, limit: number = 5) {
+		console.log('MemberService: getActivity');
 		const { data, error } = await this.databaseService.client
 			.from('credit_transactions')
 			.select('*')
@@ -300,6 +312,7 @@ export class MemberService {
 	// ── ADMIN ────────────────────────────────────────────────────
 
 	async adminGetUsers(query: AdminGetUsersQueryDto) {
+		console.log('MemberService: adminUsers');
 		const page = query.page ?? 1;
 		const limit = Math.min(50, query.limit ?? 20);
 		const offset = (page - 1) * limit;
@@ -324,6 +337,7 @@ export class MemberService {
 	}
 
 	async adminBlockUser(targetId: string) {
+		console.log('MemberService: adminBlock');
 		const { data, error } = await this.databaseService.client
 			.from('users')
 			.update({ member_status: MemberStatus.SUSPENDED, updated_at: new Date() })
@@ -336,6 +350,7 @@ export class MemberService {
 	}
 
 	async adminUnblockUser(targetId: string) {
+		console.log('MemberService: adminUnblock');
 		const { data, error } = await this.databaseService.client
 			.from('users')
 			.update({ member_status: MemberStatus.ACTIVE, updated_at: new Date() })
@@ -348,6 +363,7 @@ export class MemberService {
 	}
 
 	async adminGetPlatformStats() {
+		console.log('MemberService: adminStats');
 		const now = new Date();
 		const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
 		const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();

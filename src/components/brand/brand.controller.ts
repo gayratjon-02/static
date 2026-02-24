@@ -62,6 +62,7 @@ export class BrandController {
 		@UploadedFile() file: Express.Multer.File,
 		@AuthMember() authMember: Member,
 	): Promise<{ logo_url: string }> {
+		console.log('BrandController: uploadLogo');
 		if (!file) throw new BadRequestException(Message.UPLOAD_FAILED);
 
 		try {

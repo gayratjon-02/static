@@ -31,8 +31,8 @@ export class BrandService {
 		private claudeService: ClaudeService,
 	) { }
 
-	/** Returns config lists (industries + voices) for frontend dropdowns */
-	public getConfig() {
+	getConfig() {
+		console.log('BrandService: config');
 		const industries = Object.values(BrandIndustry).map((id) => ({
 			id,
 			label: INDUSTRY_LABELS[id],
@@ -53,8 +53,8 @@ export class BrandService {
 		return { industries, voices };
 	}
 
-	// createBrand method
-	public async createBrand(input: CreateBrandDto, authMember: Member): Promise<Brand> {
+	async createBrand(input: CreateBrandDto, authMember: Member): Promise<Brand> {
+		console.log('BrandService: createBrand');
 		const {
 			name,
 			description,
@@ -100,8 +100,8 @@ export class BrandService {
 		}
 	}
 
-	// getBrands method 
-	public async getBrands(authMember: Member, page: number, limit: number) {
+	async getBrands(authMember: Member, page: number, limit: number) {
+		console.log('BrandService: getBrands');
 		try {
 			const offset = (page - 1) * limit;
 
@@ -133,8 +133,8 @@ export class BrandService {
 		}
 	}
 
-	// getBrand method
-	public async getBrand(id: string, authMember: Member): Promise<Brand> {
+	async getBrand(id: string, authMember: Member): Promise<Brand> {
+		console.log('BrandService: getBrandById');
 		try {
 			const { data, error } = await this.databaseService.client
 				.from('brands')
@@ -153,8 +153,8 @@ export class BrandService {
 		}
 	}
 
-	// updateBrand method
-	public async updateBrand(id: string, input: UpdateBrandDto, authMember: Member): Promise<Brand> {
+	async updateBrand(id: string, input: UpdateBrandDto, authMember: Member): Promise<Brand> {
+		console.log('BrandService: updateBrandById');
 		try {
 			const updateData: T = {};
 
@@ -195,10 +195,9 @@ export class BrandService {
 		}
 	}
 
-	// deleteBrand method
-	public async deleteBrand(id: string, authMember: Member): Promise<{ message: string }> {
+	async deleteBrand(id: string, authMember: Member): Promise<{ message: string }> {
+		console.log('BrandService: deleteBrandById');
 		try {
-			// check existence
 			const { data: existing, error: findError } = await this.databaseService.client
 				.from('brands')
 				.select('_id')
@@ -230,8 +229,8 @@ export class BrandService {
 	 * Import brand data from a website URL using Claude AI.
 	 * Always resolves to homepage, extracts brand-level (not product-level) data.
 	 */
-	public async importFromUrl(url: string): Promise<BrandImportResult> {
-		this.logger.log(`Importing brand from URL: ${url}`);
+	async importFromUrl(url: string): Promise<BrandImportResult> {
+		console.log('BrandService: importFromUrl');
 
 		// Step 1: Resolve to homepage
 		const { homepageUrl, isProductPage } = this.resolveToHomepage(url);

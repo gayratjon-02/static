@@ -25,6 +25,7 @@ export class AuthService {
 	// ── USER AUTH ────────────────────────────────────────────────
 
 	async signup(input: SignupDto): Promise<AuthResponse> {
+		console.log('AuthService: signup');
 		const { email, password, full_name, avatar_url } = input;
 
 		const { data: existingUser } = await this.databaseService.client
@@ -88,6 +89,7 @@ export class AuthService {
 	}
 
 	async login(input: LoginDto): Promise<AuthResponse> {
+		console.log('AuthService: login');
 		const { email, password } = input;
 
 		const { data: user, error } = await this.databaseService.client
@@ -124,6 +126,7 @@ export class AuthService {
 	// ── ADMIN AUTH ───────────────────────────────────────────────
 
 	async adminSignup(input: AdminSignupDto): Promise<AdminAuthResponse> {
+		console.log('AuthService: adminSignup');
 		const { email, password, name, role } = input;
 
 		const { data: existingAdmin } = await this.databaseService.client
@@ -155,6 +158,7 @@ export class AuthService {
 	}
 
 	async adminLogin(input: AdminLoginDto): Promise<AdminAuthResponse> {
+		console.log('AuthService: adminLogin');
 		const { email, password } = input;
 
 		const { data: admin, error } = await this.databaseService.client
@@ -186,6 +190,7 @@ export class AuthService {
 	}
 
 	async verifyToken(token: string): Promise<Member> {
+		console.log('AuthService: verifyToken');
 		try {
 			const secret = this.configService.get<string>('JWT_SECRET');
 			const decoded = jwt.verify(token, secret!) as TokenPayload;
@@ -206,6 +211,7 @@ export class AuthService {
 	}
 
 	async verifyAdminToken(token: string): Promise<AdminMember> {
+		console.log('AuthService: verifyAdminToken');
 		try {
 			const secret = this.configService.get<string>('JWT_SECRET');
 			const decoded = jwt.verify(token, secret!) as AdminTokenPayload;
