@@ -18,6 +18,11 @@ export enum Message {
 	ONLY_SPECIFIC_ROLES_ALLOWED = 'Allowed only for members with specific roles!',
 	NOT_ALLOWED_REQUEST = 'Not Allowed Request!',
 	PASSWORDS_DO_NOT_MATCH = 'Passwords do not match!',
+	INVALID_TOKEN_PURPOSE = 'Invalid token purpose!',
+	INVALID_OR_EXPIRED_RESET_TOKEN = 'Invalid or expired reset token!',
+	PASSWORD_RESET_FAILED = 'Failed to reset password!',
+	PASSWORD_RESET_SUCCESS = 'Password has been successfully reset.',
+	PASSWORD_RESET_EMAIL_SENT = 'If an account exists, a reset email will be sent.',
 
 	// User
 	EMAIL_ALREADY_EXISTS = 'Email already exists!',

@@ -62,7 +62,7 @@ export class MemberService {
 	}
 
 	async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
-		const SAFE_RESPONSE = { success: true, message: 'If an account exists, a reset email will be sent.' };
+		const SAFE_RESPONSE = { success: true, message: Message.PASSWORD_RESET_EMAIL_SENT };
 
 		const { data: user } = await this.databaseService.client
 			.from('users')
@@ -83,17 +83,13 @@ export class MemberService {
 		return SAFE_RESPONSE;
 	}
 
-	// Execute password reset
-	public async executePasswordReset(
-		token: string,
-		newPassword: string,
-	): Promise<{ success: boolean; message: string }> {
+	async executePasswordReset(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
 		try {
 			const secret = this.configService.get<string>('JWT_SECRET');
 			const decoded: any = jwt.verify(token, secret);
 
 			if (decoded.purpose !== 'reset_password') {
-				throw new BadRequestException('Invalid token purpose');
+				throw new BadRequestException(Message.INVALID_TOKEN_PURPOSE);
 			}
 
 			const password_hash = await this.authService.hashPassword(newPassword);
@@ -104,13 +100,13 @@ export class MemberService {
 				.eq('_id', decoded.id);
 
 			if (error) {
-				throw new InternalServerErrorException('Failed to reset password');
+				throw new InternalServerErrorException(Message.PASSWORD_RESET_FAILED);
 			}
 
-			return { success: true, message: 'Password has been successfully reset' };
+			return { success: true, message: Message.PASSWORD_RESET_SUCCESS };
 		} catch (err) {
-			console.error('Execute password reset error:', err);
-			throw new BadRequestException('Invalid or expired reset token');
+			if (err instanceof BadRequestException || err instanceof InternalServerErrorException) throw err;
+			throw new BadRequestException(Message.INVALID_OR_EXPIRED_RESET_TOKEN);
 		}
 	}
 
