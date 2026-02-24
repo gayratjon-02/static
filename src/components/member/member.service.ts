@@ -22,7 +22,7 @@ export class MemberService {
 		private databaseService: DatabaseService,
 		private emailService: EmailService,
 		private configService: ConfigService,
-	) { }
+	) {}
 
 	// test method
 	public async testMethod() {
@@ -38,9 +38,7 @@ export class MemberService {
 	}
 
 	async adminSignupWithCheck(input: AdminSignupDto, authHeader: string): Promise<AdminAuthResponse> {
-		const { count } = await this.databaseService.client
-			.from('admin_users')
-			.select('*', { count: 'exact', head: true });
+		const { count } = await this.databaseService.client.from('admin_users').select('*', { count: 'exact', head: true });
 
 		if (!count) {
 			return this.authService.adminSignup(input);
@@ -59,37 +57,37 @@ export class MemberService {
 		return this.authService.adminSignup(input);
 	}
 
-	// admin login method
-	public async adminLogin(input: AdminLoginDto): Promise<AdminAuthResponse> {
-		return await this.authService.adminLogin(input);
+	async adminLogin(input: AdminLoginDto): Promise<AdminAuthResponse> {
+		return this.authService.adminLogin(input);
 	}
 
-	// Request password reset (stateless via short-lived JWT)
-	public async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+	async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
+		const SAFE_RESPONSE = { success: true, message: 'If an account exists, a reset email will be sent.' };
+
 		const { data: user } = await this.databaseService.client
 			.from('users')
 			.select('_id, full_name, member_status')
 			.eq('email', email)
 			.single();
 
-		// Always return success to prevent email enumeration attacks
-		if (!user || user.member_status === 'deleted' || user.member_status === 'suspended') {
-			return { success: true, message: 'If an account exists, a reset email will be sent.' };
+		if (!user || user.member_status === MemberStatus.DELETED || user.member_status === MemberStatus.SUSPENDED) {
+			return SAFE_RESPONSE;
 		}
 
 		const secret = this.configService.get<string>('JWT_SECRET');
 		const token = jwt.sign({ id: user._id, purpose: 'reset_password' }, secret, { expiresIn: '1h' });
+		const resetLink = `${this.configService.get<string>('FRONTEND_URL')}/reset-password?token=${token}`;
 
-		const frontendUrl = this.configService.get<string>('FRONTEND_URL');
-		const resetLink = `${frontendUrl}/reset-password?token=${token}`;
+		this.emailService.sendPasswordReset(email, resetLink, user.full_name).catch(() => {});
 
-		this.emailService.sendPasswordReset(email, resetLink, user.full_name).catch(console.error);
-
-		return { success: true, message: 'If an account exists, a reset email will be sent.' };
+		return SAFE_RESPONSE;
 	}
 
 	// Execute password reset
-	public async executePasswordReset(token: string, newPassword: string): Promise<{ success: boolean; message: string }> {
+	public async executePasswordReset(
+		token: string,
+		newPassword: string,
+	): Promise<{ success: boolean; message: string }> {
 		try {
 			const secret = this.configService.get<string>('JWT_SECRET');
 			const decoded: any = jwt.verify(token, secret);
@@ -306,7 +304,10 @@ export class MemberService {
 
 		let dbQuery = this.databaseService.client
 			.from('users')
-			.select('_id, email, full_name, member_status, subscription_tier, subscription_status, credits_used, credits_limit, created_at', { count: 'exact' });
+			.select(
+				'_id, email, full_name, member_status, subscription_tier, subscription_status, credits_used, credits_limit, created_at',
+				{ count: 'exact' },
+			);
 
 		if (query.search) {
 			dbQuery = dbQuery.or(`email.ilike.%${query.search}%,full_name.ilike.%${query.search}%`);
@@ -359,18 +360,41 @@ export class MemberService {
 		const weekStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
 		const [
-			totalUsersRes, activeUsersRes, paidUsersRes,
-			totalAdsRes, todayAdsRes, weekAdsRes,
-			completedAdsRes, failedAdsRes,
+			totalUsersRes,
+			activeUsersRes,
+			paidUsersRes,
+			totalAdsRes,
+			todayAdsRes,
+			weekAdsRes,
+			completedAdsRes,
+			failedAdsRes,
 		] = await Promise.all([
 			this.databaseService.client.from('users').select('*', { count: 'exact', head: true }),
-			this.databaseService.client.from('users').select('*', { count: 'exact', head: true }).eq('member_status', MemberStatus.ACTIVE),
-			this.databaseService.client.from('users').select('*', { count: 'exact', head: true }).neq('subscription_tier', 'free'),
+			this.databaseService.client
+				.from('users')
+				.select('*', { count: 'exact', head: true })
+				.eq('member_status', MemberStatus.ACTIVE),
+			this.databaseService.client
+				.from('users')
+				.select('*', { count: 'exact', head: true })
+				.neq('subscription_tier', 'free'),
 			this.databaseService.client.from('generated_ads').select('*', { count: 'exact', head: true }),
-			this.databaseService.client.from('generated_ads').select('*', { count: 'exact', head: true }).gte('created_at', todayStart),
-			this.databaseService.client.from('generated_ads').select('*', { count: 'exact', head: true }).gte('created_at', weekStart),
-			this.databaseService.client.from('generated_ads').select('*', { count: 'exact', head: true }).eq('generation_status', 'completed'),
-			this.databaseService.client.from('generated_ads').select('*', { count: 'exact', head: true }).eq('generation_status', 'failed'),
+			this.databaseService.client
+				.from('generated_ads')
+				.select('*', { count: 'exact', head: true })
+				.gte('created_at', todayStart),
+			this.databaseService.client
+				.from('generated_ads')
+				.select('*', { count: 'exact', head: true })
+				.gte('created_at', weekStart),
+			this.databaseService.client
+				.from('generated_ads')
+				.select('*', { count: 'exact', head: true })
+				.eq('generation_status', 'completed'),
+			this.databaseService.client
+				.from('generated_ads')
+				.select('*', { count: 'exact', head: true })
+				.eq('generation_status', 'failed'),
 		]);
 
 		return {
