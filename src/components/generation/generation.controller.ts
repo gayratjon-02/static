@@ -22,7 +22,7 @@ export class GenerationController {
 
 	@UseGuards(ThrottlerGuard, AuthGuard, CreditsGuard)
 	@Throttle({ default: { ttl: 60000, limit: 3 } })
-	@RequireCredits(5)
+	@RequireCredits('credits_per_generation')
 	@Post('createGeneration')
 	public async createGeneration(
 		@Body() input: CreateGenerationDto,
@@ -60,7 +60,7 @@ export class GenerationController {
 	}
 
 	@UseGuards(AuthGuard, CreditsGuard)
-	@RequireCredits(2)
+	@RequireCredits('credits_per_fix_errors')
 	@Post('fixErrors/:adId')
 	public async fixErrors(
 		@Param('adId') adId: string,
@@ -71,7 +71,7 @@ export class GenerationController {
 	}
 
 	@UseGuards(AuthGuard, CreditsGuard)
-	@RequireCredits(2)
+	@RequireCredits('credits_per_regenerate_single')
 	@Post('regenerateSingle/:adId')
 	public async regenerateSingle(
 		@Param('adId') adId: string,

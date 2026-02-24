@@ -11,20 +11,18 @@ import { Message } from '../../libs/enums/common.enum';
 import { GenerationStatus } from '../../libs/enums/generation/generation.enum';
 import { Member } from '../../libs/types/member/member.type';
 import { Generation, GenerationJobData, GenerationStatusResponse, GenerationResultsResponse, FixErrorsJobData, ExportRatiosResponse } from '../../libs/types/generation/generation.type';
-
-const GENERATION_CREDIT_COST = 5;
-const FIX_ERRORS_CREDIT_COST = 2;
-const REGENERATE_CREDIT_COST = 2;
+import { SystemConfigService } from '../system-config/system-config.service';
 
 @Injectable()
 export class GenerationService {
 	private readonly logger = new Logger('GenerationService');
 
 	constructor(
-		private databaseService: DatabaseService,
-		private claudeService: ClaudeService,
-		@InjectQueue('generation') private generationQueue: Queue,
-	) { }
+		private readonly databaseService: DatabaseService,
+		private readonly claudeService: ClaudeService,
+		private readonly systemConfigService: SystemConfigService,
+		@InjectQueue('generation') private readonly generationQueue: Queue,
+	) {}
 
 	public async createGeneration(input: CreateGenerationDto, authMember: Member): Promise<Generation> {
 		const { brand_id, product_id, concept_id, important_notes } = input;
@@ -105,14 +103,16 @@ export class GenerationService {
 			}
 
 			const creditsRemaining =
-				(userData.credits_limit - userData.credits_used) + (userData.addon_credits_remaining || 0);
+				(userData.credits_limit - userData.credits_used) + (userData.addon_credits_remaining ?? 0);
 
-			if (creditsRemaining < GENERATION_CREDIT_COST) {
+			const generationCost = await this.systemConfigService.getNumber('credits_per_generation', 5);
+
+			if (creditsRemaining < generationCost) {
 				await this.databaseService.client.from('generated_ads').delete().in('_id', generatedAds.map(a => a._id));
 				throw new BadRequestException(Message.INSUFFICIENT_CREDITS);
 			}
 
-			const newCreditsUsed = userData.credits_used + GENERATION_CREDIT_COST;
+			const newCreditsUsed = userData.credits_used + generationCost;
 
 			const { error: updateCreditError } = await this.databaseService.client
 				.from('users')
@@ -124,15 +124,14 @@ export class GenerationService {
 				throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
 			}
 
-			// 6. Write to credit_transactions table (if table exists)
 			await this.databaseService.client.from('credit_transactions').insert({
 				user_id: authMember._id,
-				credits_amount: -GENERATION_CREDIT_COST,
+				credits_amount: -generationCost,
 				transaction_type: 'generation',
-				reference_id: batchId, // Use batch_id as reference
+				reference_id: batchId,
 				reference_type: 'generated_ad_batch',
 				balance_before: creditsRemaining,
-				balance_after: creditsRemaining - GENERATION_CREDIT_COST,
+				balance_after: creditsRemaining - generationCost,
 			}).then(({ error }) => {
 				if (error) this.logger.warn(`credit_transactions insert failed (non-blocking): ${error.message}`);
 			});
@@ -313,9 +312,11 @@ export class GenerationService {
 		}
 
 		const creditsRemaining =
-			(userData.credits_limit - userData.credits_used) + (userData.addon_credits_remaining || 0);
+			(userData.credits_limit - userData.credits_used) + (userData.addon_credits_remaining ?? 0);
 
-		if (creditsRemaining < FIX_ERRORS_CREDIT_COST) {
+		const fixCost = await this.systemConfigService.getNumber('credits_per_fix_errors', 2);
+
+		if (creditsRemaining < fixCost) {
 			throw new BadRequestException(Message.INSUFFICIENT_CREDITS);
 		}
 
@@ -344,7 +345,7 @@ export class GenerationService {
 		// 4. Credit yechish
 		const { error: updateCreditError } = await this.databaseService.client
 			.from('users')
-			.update({ credits_used: userData.credits_used + FIX_ERRORS_CREDIT_COST })
+			.update({ credits_used: userData.credits_used + fixCost })
 			.eq('_id', authMember._id);
 
 		if (updateCreditError) {
@@ -355,12 +356,12 @@ export class GenerationService {
 		// 5. Write to credit_transactions
 		await this.databaseService.client.from('credit_transactions').insert({
 			user_id: authMember._id,
-			credits_amount: -FIX_ERRORS_CREDIT_COST,
+			credits_amount: -fixCost,
 			transaction_type: 'fix_errors',
 			reference_id: newAd._id,
 			reference_type: 'generated_ad',
 			balance_before: creditsRemaining,
-			balance_after: creditsRemaining - FIX_ERRORS_CREDIT_COST,
+			balance_after: creditsRemaining - fixCost,
 		}).then(({ error }) => {
 			if (error) this.logger.warn(`credit_transactions insert failed (non-blocking): ${error.message}`);
 		});
@@ -417,9 +418,11 @@ export class GenerationService {
 		}
 
 		const creditsRemaining =
-			(userData.credits_limit - userData.credits_used) + (userData.addon_credits_remaining || 0);
+			(userData.credits_limit - userData.credits_used) + (userData.addon_credits_remaining ?? 0);
 
-		if (creditsRemaining < REGENERATE_CREDIT_COST) {
+		const regenerateCost = await this.systemConfigService.getNumber('credits_per_regenerate_single', 2);
+
+		if (creditsRemaining < regenerateCost) {
 			throw new BadRequestException(Message.INSUFFICIENT_CREDITS);
 		}
 
@@ -448,7 +451,7 @@ export class GenerationService {
 		// 4. Credit yechish
 		const { error: updateCreditError } = await this.databaseService.client
 			.from('users')
-			.update({ credits_used: userData.credits_used + REGENERATE_CREDIT_COST })
+			.update({ credits_used: userData.credits_used + regenerateCost })
 			.eq('_id', authMember._id);
 
 		if (updateCreditError) {
@@ -459,12 +462,12 @@ export class GenerationService {
 		// 5. credit_transactions
 		await this.databaseService.client.from('credit_transactions').insert({
 			user_id: authMember._id,
-			credits_amount: -REGENERATE_CREDIT_COST,
+			credits_amount: -regenerateCost,
 			transaction_type: 'regenerate_single',
 			reference_id: newAd._id,
 			reference_type: 'generated_ad',
 			balance_before: creditsRemaining,
-			balance_after: creditsRemaining - REGENERATE_CREDIT_COST,
+			balance_after: creditsRemaining - regenerateCost,
 		}).then(({ error }) => {
 			if (error) this.logger.warn(`credit_transactions insert failed (non-blocking): ${error.message}`);
 		});

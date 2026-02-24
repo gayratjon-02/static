@@ -16,6 +16,7 @@ import { S3Module } from './components/s3/s3.module';
 import { EmailModule } from './components/email/email.module';
 import { CanvaModule } from './components/canva/canva.module';
 import { PromptTemplatesModule } from './components/prompt-templates/prompt-templates.module';
+import { SystemConfigModule } from './components/system-config/system-config.module';
 import { SanitizePipe } from './libs/pipes/sanitize.pipe';
 import { ValidationExceptionFilter } from './libs/filters/validation-exception.filter';
 import { LoggingInterceptor } from './libs/interceptor/Logging.interceptor';
@@ -86,6 +87,7 @@ import { LoggingInterceptor } from './libs/interceptor/Logging.interceptor';
 		EmailModule,
 		CanvaModule,
 		PromptTemplatesModule,
+		SystemConfigModule,
 	],
 })
 export class AppModule { }
