@@ -30,22 +30,12 @@ export class MemberService {
 		return { message: 'Member service is working!' };
 	}
 
-	// signup method
-	public async signup(input: SignupDto): Promise<AuthResponse> {
-		const result = await this.authService.signup(input);
-		// Fire-and-forget welcome email — does not block the response
-		if (result?.member?.email) {
-			this.emailService.sendWelcome(
-				result.member.email,
-				result.member.full_name || 'User',
-			).catch(() => { });
-		}
-		return result;
+	async signup(input: SignupDto): Promise<AuthResponse> {
+		return this.authService.signup(input);
 	}
 
-	// login method
-	public async login(input: LoginDto): Promise<AuthResponse> {
-		return await this.authService.login(input);
+	async login(input: LoginDto): Promise<AuthResponse> {
+		return this.authService.login(input);
 	}
 
 	// admin signup method with bypass for the first admin
