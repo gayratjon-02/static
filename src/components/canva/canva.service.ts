@@ -1,132 +1,126 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { DatabaseService } from 'src/database/database.service';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { DatabaseService } from '../../database/database.service';
 import { EmailService } from '../email/email.service';
+import { Message } from '../../libs/enums/common.enum';
 import { CreateCanvaOrderDto } from './dto/create-canva-order.dto';
 
 @Injectable()
 export class CanvaService {
-    private readonly logger = new Logger(CanvaService.name);
+	constructor(
+		private readonly databaseService: DatabaseService,
+		private readonly emailService: EmailService,
+	) {}
 
-    constructor(
-        private readonly databaseService: DatabaseService,
-        private readonly emailService: EmailService,
-    ) { }
+	async createOrder(
+		userId: string,
+		userEmail: string,
+		fullName: string | null,
+		dto: CreateCanvaOrderDto,
+	): Promise<{ _id: string }> {
+		console.log('CanvaService: POST /orders');
 
-    /**
-     * Create Canva order and send confirmation email.
-     */
-    async createOrder(
-        userId: string,
-        userEmail: string,
-        fullName: string | null,
-        dto: CreateCanvaOrderDto,
-    ): Promise<{ _id: string }> {
-        const { data: ad } = await this.databaseService.client
-            .from('generated_ads')
-            .select('_id')
-            .eq('_id', dto.generated_ad_id)
-            .eq('user_id', userId)
-            .single();
+		const { data: ad } = await this.databaseService.client
+			.from('generated_ads')
+			.select('_id')
+			.eq('_id', dto.generated_ad_id)
+			.eq('user_id', userId)
+			.single();
 
-        if (!ad) {
-            throw new BadRequestException('Ad not found or does not belong to you');
-        }
+		if (!ad) {
+			throw new BadRequestException(Message.AD_NOT_FOUND);
+		}
 
-        const { data: order, error } = await this.databaseService.client
-            .from('canva_orders')
-            .insert({
-                user_id: userId,
-                generated_ad_id: dto.generated_ad_id,
-                stripe_payment_id: dto.stripe_payment_id,
-                price_paid_cents: dto.price_paid_cents,
-                status: 'pending',
-            })
-            .select('_id')
-            .single();
+		const { data: order, error } = await this.databaseService.client
+			.from('canva_orders')
+			.insert({
+				user_id: userId,
+				generated_ad_id: dto.generated_ad_id,
+				stripe_payment_id: dto.stripe_payment_id,
+				price_paid_cents: dto.price_paid_cents,
+				status: 'pending',
+			})
+			.select('_id')
+			.single();
 
-        if (error || !order) {
-            this.logger.error(`Canva order insert: ${error?.message}`);
-            throw new BadRequestException('Failed to create order');
-        }
+		if (error ?? !order) {
+			throw new BadRequestException(Message.CANVA_ORDER_CREATE_FAILED);
+		}
 
-        this.emailService.sendCanvaOrderConfirmation(userEmail, order._id, fullName || undefined).catch(() => { });
-        this.logger.log(`Canva order created: ${order._id}, user: ${userId}`);
-        return { _id: order._id };
-    }
+		this.emailService.sendCanvaOrderConfirmation(userEmail, order._id, fullName ?? undefined).catch(() => {});
 
-    /**
-     * Fulfill Canva order (admin): set link and send email.
-     */
-    async fulfillOrder(orderId: string, canvaLink: string, _adminUserId: string): Promise<void> {
-        const { data: order, error: fetchError } = await this.databaseService.client
-            .from('canva_orders')
-            .select('_id, user_id, status')
-            .eq('_id', orderId)
-            .single();
+		return { _id: order._id };
+	}
 
-        if (fetchError || !order) {
-            throw new NotFoundException('Order not found');
-        }
-        if (order.status === 'fulfilled') {
-            throw new BadRequestException('Order is already fulfilled');
-        }
+	async fulfillOrder(orderId: string, canvaLink: string, adminUserId: string): Promise<void> {
+		console.log('CanvaService: PATCH /orders/:id/fulfill');
 
-        const now = new Date().toISOString();
+		const { data: order, error: fetchError } = await this.databaseService.client
+			.from('canva_orders')
+			.select('_id, user_id, status')
+			.eq('_id', orderId)
+			.single();
 
-        const { error: updateError } = await this.databaseService.client
-            .from('canva_orders')
-            .update({
-                status: 'fulfilled',
-                canva_link: canvaLink,
-                fulfilled_at: now,
-                fulfilled_by: _adminUserId,
-            })
-            .eq('_id', orderId);
+		if (fetchError ?? !order) {
+			throw new NotFoundException(Message.CANVA_ORDER_NOT_FOUND);
+		}
 
-        if (updateError) {
-            this.logger.error(`Canva fulfill update: ${updateError.message}`);
-            throw new BadRequestException('Failed to update');
-        }
+		if (order.status === 'fulfilled') {
+			throw new BadRequestException(Message.CANVA_ORDER_ALREADY_FULFILLED);
+		}
 
-        const { data: user } = await this.databaseService.client
-            .from('users')
-            .select('email, full_name')
-            .eq('_id', order.user_id)
-            .single();
+		const { error: updateError } = await this.databaseService.client
+			.from('canva_orders')
+			.update({
+				status: 'fulfilled',
+				canva_link: canvaLink,
+				fulfilled_at: new Date().toISOString(),
+				fulfilled_by: adminUserId,
+			})
+			.eq('_id', orderId);
 
-        if (user?.email) {
-            this.emailService.sendCanvaFulfilled(user.email, canvaLink, user.full_name || undefined).catch(() => { });
-        }
+		if (updateError) {
+			throw new BadRequestException(Message.CANVA_ORDER_UPDATE_FAILED);
+		}
 
-        this.logger.log(`Canva order fulfilled: ${orderId}`);
-    }
+		const { data: user } = await this.databaseService.client
+			.from('users')
+			.select('email, full_name')
+			.eq('_id', order.user_id)
+			.single();
 
-    /** Get current user's Canva orders */
-    async getMyOrders(userId: string) {
-        const { data, error } = await this.databaseService.client
-            .from('canva_orders')
-            .select('_id, generated_ad_id, status, canva_link, price_paid_cents, created_at, fulfilled_at')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false });
+		if (user?.email) {
+			this.emailService.sendCanvaFulfilled(user.email, canvaLink, user.full_name ?? undefined).catch(() => {});
+		}
+	}
 
-        if (error) {
-            this.logger.error(`Canva getMyOrders: ${error.message}`);
-            throw new BadRequestException('Failed to load orders');
-        }
-        return data || [];
-    }
+	async getMyOrders(userId: string) {
+		console.log('CanvaService: GET /orders');
 
-    /** Get all Canva orders (Admin-only) */
-    async getAllOrdersAdmin() {
-        const { data, error } = await this.databaseService.client
-            .from('canva_orders')
-            .select('*, users:user_id(email, full_name), generated_ads:generated_ad_id(ad_name, image_url_1x1, image_url_16x9, image_url_9x16)')
-            .order('created_at', { ascending: false });
+		const { data, error } = await this.databaseService.client
+			.from('canva_orders')
+			.select('_id, generated_ad_id, status, canva_link, price_paid_cents, created_at, fulfilled_at')
+			.eq('user_id', userId)
+			.order('created_at', { ascending: false });
 
-        if (error) {
-            this.logger.error(`Admin getAllOrders: ${error.message}`);
-            throw new BadRequestException('Failed to load all orders');
-        }
-        return data || [];
-    }
+		if (error) {
+			throw new BadRequestException(Message.CANVA_ORDERS_LOAD_FAILED);
+		}
+
+		return data ?? [];
+	}
+
+	async getAllOrdersAdmin() {
+		console.log('CanvaService: GET /orders/all');
+
+		const { data, error } = await this.databaseService.client
+			.from('canva_orders')
+			.select('*, users:user_id(email, full_name), generated_ads:generated_ad_id(ad_name, image_url_1x1, image_url_16x9, image_url_9x16)')
+			.order('created_at', { ascending: false });
+
+		if (error) {
+			throw new BadRequestException(Message.CANVA_ORDERS_LOAD_FAILED);
+		}
+
+		return data ?? [];
+	}
 }

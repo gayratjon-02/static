@@ -53,6 +53,14 @@ export enum Message {
 	CONCEPT_NOT_FOUND = 'Concept not found!',
 	GENERATION_NOT_FOUND = 'Generation not found or does not belong to you!',
 	GENERATION_NOT_COMPLETED = 'Generation is not completed yet!',
+
+	// Canva
+	AD_NOT_FOUND = 'Ad not found or does not belong to you!',
+	CANVA_ORDER_CREATE_FAILED = 'Failed to create Canva order!',
+	CANVA_ORDER_NOT_FOUND = 'Canva order not found!',
+	CANVA_ORDER_ALREADY_FULFILLED = 'Canva order is already fulfilled!',
+	CANVA_ORDER_UPDATE_FAILED = 'Failed to update Canva order!',
+	CANVA_ORDERS_LOAD_FAILED = 'Failed to load Canva orders!',
 }
 
 /** User account status */
