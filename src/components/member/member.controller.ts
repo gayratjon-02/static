@@ -62,10 +62,7 @@ export class MemberController {
 
 	@UseGuards(AuthGuard)
 	@Post('forgetPassword')
-	async forgetPassword(
-		@AuthMember() authMember: Member,
-		@Body() input: ForgetPasswordDto,
-	): Promise<MemberResponse> {
+	async forgetPassword(@AuthMember() authMember: Member, @Body() input: ForgetPasswordDto): Promise<MemberResponse> {
 		return this.memberService.forgetPassword(authMember, input);
 	}
 
@@ -77,10 +74,7 @@ export class MemberController {
 
 	@UseGuards(AuthGuard)
 	@Post('updateMember')
-	async updateMember(
-		@Body() input: UpdateMemberDto,
-		@AuthMember() authMember: Member,
-	): Promise<MemberResponse> {
+	async updateMember(@Body() input: UpdateMemberDto, @AuthMember() authMember: Member): Promise<MemberResponse> {
 		return this.memberService.updateMember(input, authMember);
 	}
 
