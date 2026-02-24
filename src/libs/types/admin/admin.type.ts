@@ -24,6 +24,13 @@ export interface AdminMember extends AdminResponse {
 	admin_role: AdminRole;
 }
 
+/** Admin JWT tokenga yoziladigan payload */
+export interface AdminTokenPayload {
+	id: string;
+	is_admin: true;
+	admin_role: AdminRole;
+}
+
 /** Admin login/signup response */
 export interface AdminAuthResponse {
 	accessToken: string;
