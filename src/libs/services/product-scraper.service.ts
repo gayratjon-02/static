@@ -189,6 +189,7 @@ export class ProductScraperService {
 			const usps: string[] = [];
 			if (bodyHtml) {
 				const $body = cheerio.load(bodyHtml);
+
 				$body('li').each((_, el) => {
 					if (usps.length >= 5) return;
 					const text = $body(el).text().replace(/\s+/g, ' ').trim();
@@ -196,6 +197,20 @@ export class ProductScraperService {
 						usps.push(text);
 					}
 				});
+
+				if (usps.length === 0) {
+					$body('strong, b').each((_, el) => {
+						if (usps.length >= 5) return;
+						const text = $body(el).text().replace(/\s+/g, ' ').trim();
+						if (text.length >= 8 && text.length <= 100 && !text.includes(':')) {
+							usps.push(text);
+						}
+					});
+				}
+
+				if (usps.length === 0) {
+					usps.push(...this.extractUspsFromText(description));
+				}
 			}
 
 			let priceText = '';
@@ -434,7 +449,7 @@ export class ProductScraperService {
 	private extractProductDetails($: cheerio.CheerioAPI): { usps: string[]; ingredients: string } {
 		const usps: string[] = [];
 
-		const descSelectors = [
+		const liSelectors = [
 			'.product-description ul li',
 			'.product__description ul li',
 			'.product-single__description ul li',
@@ -444,9 +459,10 @@ export class ProductScraperService {
 			'[class*="benefit"] li',
 			'[class*="highlight"] li',
 			'[class*="selling-point"] li',
+			'[class*="usp"] li',
 		];
 
-		for (const selector of descSelectors) {
+		for (const selector of liSelectors) {
 			if (usps.length >= 5) break;
 			$(selector).each((_, el) => {
 				if (usps.length >= 5) return;
@@ -455,6 +471,48 @@ export class ProductScraperService {
 					usps.push(text);
 				}
 			});
+		}
+
+		if (usps.length === 0) {
+			const strongSelectors = [
+				'.product-description strong',
+				'.product__description strong',
+				'.product-single__description strong',
+				'[class*="product-detail"] strong',
+				'.product-description b',
+				'.product__description b',
+			];
+
+			for (const selector of strongSelectors) {
+				if (usps.length >= 5) break;
+				$(selector).each((_, el) => {
+					if (usps.length >= 5) return;
+					const text = $(el).text().replace(/\s+/g, ' ').trim();
+					if (text.length >= 8 && text.length <= 100 && !text.includes(':')) {
+						usps.push(text);
+					}
+				});
+			}
+		}
+
+		if (usps.length === 0) {
+			const descSelectors = [
+				'.product-description',
+				'.product__description',
+				'.product-single__description',
+				'[class*="product-detail"]',
+				'[itemprop="description"]',
+			];
+
+			for (const selector of descSelectors) {
+				if (usps.length >= 5) break;
+				const el = $(selector).first();
+				if (el.length) {
+					const text = el.text();
+					usps.push(...this.extractUspsFromText(text));
+					break;
+				}
+			}
 		}
 
 		let ingredients = '';
@@ -476,6 +534,29 @@ export class ProductScraperService {
 		}
 
 		return { usps, ingredients };
+	}
+
+	private extractUspsFromText(text: string): string[] {
+		const usps: string[] = [];
+
+		const lines = text.split(/[\n\r]+/).map((l) => l.trim()).filter(Boolean);
+		for (const line of lines) {
+			if (usps.length >= 5) break;
+			const cleaned = line.replace(/^[✔✓•★✦▸►▪■□●○◆◇→\-–—]\s*/, '').trim();
+			if (cleaned !== line.trim() && cleaned.length >= 10 && cleaned.length <= 150) {
+				usps.push(cleaned);
+			}
+		}
+
+		if (usps.length === 0) {
+			const bulletPattern = /[✔✓•★✦▸►]\s*([^✔✓•★✦▸►\n]{10,150})/g;
+			let match;
+			while ((match = bulletPattern.exec(text)) !== null && usps.length < 5) {
+				usps.push(match[1].trim());
+			}
+		}
+
+		return usps;
 	}
 
 	// ── Meta Extraction ──────────────────────────────────
