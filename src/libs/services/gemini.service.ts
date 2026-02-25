@@ -9,6 +9,12 @@ export interface GeneratedImage {
 	buffer: Buffer;
 }
 
+export interface ReferenceImageMeta {
+	productImageCount: number;
+	hasLogo: boolean;
+	hasConcept: boolean;
+}
+
 // Custom error types for better error handling
 export class GeminiTimeoutError extends Error {
 	constructor(message: string) {
@@ -144,6 +150,7 @@ export class GeminiService {
 		_resolution?: string,
 		userApiKey?: string,
 		referenceImageParts?: Array<{ data: string; mimeType: string }>,
+		imageMeta?: ReferenceImageMeta,
 	): Promise<{ images: GeminiImageResult[] }> {
 		const client = this.getClient(userApiKey);
 		const startTime = Date.now();
@@ -157,51 +164,8 @@ export class GeminiService {
 
 		const sanitizedPrompt = this.sanitizePromptForImageGeneration(prompt);
 
-		// Build reference image instructions if images are provided
-		const refCount = referenceImageParts?.length || 0;
-		const referenceInstructions = refCount > 0 ? [
-			'REFERENCE IMAGES PROVIDED:',
-			refCount >= 1 ? [
-				'- Image 1: PRODUCT IMAGE — this is the actual product.',
-				'  ═══ PRODUCT RENDERING RULES (CRITICAL) ═══',
-				'  • Render the product LARGE — it should occupy 40–60% of the image area',
-				'  • The product is the HERO of this ad — do NOT shrink it to a small corner',
-				'  • Match the product\'s exact colors, shape, proportions, and material finish from the reference photo',
-				'  • Preserve ALL text on the product packaging (labels, brand name, ingredients, dosage) with PERFECT clarity',
-				'  • Product label text must be SHARP, READABLE, and CORRECTLY SPELLED — never blurred, smeared, or garbled',
-				'  • If the product has small text on the label, render it at a size where it remains legible',
-				'  • Do NOT invent or alter any text on the product packaging — copy it exactly from the reference',
-				'  • The product photo is the MOST IMPORTANT reference — prioritize product accuracy over everything else',
-				'  ═══════════════════════════════════════════',
-			].join('\n') : '',
-			refCount >= 2 ? [
-				'- Image 2: BRAND LOGO — use the VISUAL DESIGN (shape, colors, icon style) from this logo image.',
-				'  CRITICAL: The logo image may contain text from a DIFFERENT brand (placeholder/template).',
-				'  IGNORE any text visible in the logo image. Instead, render the brand name from the',
-				'  CRITICAL BRAND NAME REQUIREMENT section in this prompt. Use ONLY that brand name.',
-				'  Do NOT reproduce "GlowVita", "PREMIUM SKINCARE", or any other text from the logo image.',
-			].join('\n') : '',
-			refCount >= 3 ? [
-				'- Image 3: CONCEPT REFERENCE — LAYOUT AND VISUAL STYLE ONLY.',
-				'',
-				'  ═══ CONTENT ISOLATION RULES (CRITICAL) ═══',
-				'  FROM THE CONCEPT IMAGE, COPY ONLY:',
-				'    • Overall layout structure (where elements are positioned)',
-				'    • Visual style (font types, design aesthetic, element types)',
-				'    • Background style and composition approach',
-				'  FROM THE CONCEPT IMAGE, DO NOT COPY:',
-				'    • ANY text, testimonials, quotes, or written words',
-				'    • ANY product names, brand names, or logos',
-				'    • ANY product claims, feature descriptions, or slogans',
-				'    • ANY product imagery (bottles, containers, packaging)',
-				'    • ANY reviewer names or attribution text',
-				'    • ANY pricing, offers, or promotional text',
-				'  The concept image shows a DIFFERENT product from a DIFFERENT brand.',
-				'  ALL text visible in the concept image belongs to that other product — DO NOT reproduce it.',
-				'  The ONLY text allowed in this ad is from the TEXT RENDERING REQUIREMENTS section below.',
-				'  ═══════════════════════════════════════════',
-			].join('\n') : '',
-		].filter(Boolean).join('\n') + '\n\n' : '';
+		const refCount = referenceImageParts?.length ?? 0;
+		const referenceInstructions = this.buildReferenceInstructions(refCount, imageMeta);
 
 		const aspectInstruction = `Generate this image in ${ratioText} aspect ratio.`;
 
@@ -315,9 +279,10 @@ export class GeminiService {
 		resolution?: string,
 		userApiKey?: string,
 		referenceImageParts?: Array<{ data: string; mimeType: string }>,
+		imageMeta?: ReferenceImageMeta,
 	): Promise<GeminiImageResult> {
 		try {
-			const result = await this.generateImages(prompt, aspectRatio, resolution, userApiKey, referenceImageParts);
+			const result = await this.generateImages(prompt, aspectRatio, resolution, userApiKey, referenceImageParts, imageMeta);
 
 			if (result.images.length > 0) {
 				return result.images[0];
@@ -338,26 +303,26 @@ export class GeminiService {
 		resolution?: string,
 		userApiKey?: string,
 		productDescription?: string,
+		imageMeta?: ReferenceImageMeta,
 	): Promise<GeminiImageResult> {
-		// Download reference images as base64 for Gemini Flash Image input
 		const imageParts: Array<{ data: string; mimeType: string }> = [];
-		for (const url of (referenceImages || [])) {
+		for (const url of (referenceImages ?? [])) {
 			if (!url) continue;
 			try {
 				const { base64, mimeType } = await this.downloadImageAsBase64(url);
 				imageParts.push({ data: base64, mimeType });
-			} catch (err: any) {
-				this.logger.warn(`Failed to download reference image: ${url.substring(0, 80)} — ${err.message}`);
+			} catch (err: unknown) {
+				const errMsg = err instanceof Error ? err.message : String(err);
+				this.logger.warn(`Failed to download reference image: ${url.substring(0, 80)} — ${errMsg}`);
 			}
 		}
 
-		// If Claude pre-analyzed the images, enrich the prompt with size & clarity instructions
 		let enrichedPrompt = prompt;
 		if (productDescription) {
 			enrichedPrompt = `${prompt}\n\n═══ PRODUCT VISUAL REFERENCE (HIGHEST PRIORITY) ═══\nRender the product EXACTLY as described below — do NOT generate a different-looking product.\nThe product must be LARGE and PROMINENT — occupy 40–60% of the image area.\nALL text visible on the product packaging (labels, brand name, ingredients) must be:\n  • PIXEL-PERFECT — sharp edges, no blur, no smearing\n  • CORRECTLY SPELLED — copy every letter exactly from the description\n  • READABLE at the rendered size — if text would be too small to read, scale the product up\nDo NOT invent, alter, or garble any packaging text.\n\nProduct details:\n${productDescription}\n═══════════════════════════════════════════════════`;
 		}
 
-		return this.generateImage(enrichedPrompt, undefined, aspectRatio, resolution, userApiKey, imageParts.length > 0 ? imageParts : undefined);
+		return this.generateImage(enrichedPrompt, undefined, aspectRatio, resolution, userApiKey, imageParts.length > 0 ? imageParts : undefined, imageMeta);
 	}
 
 	/**
@@ -370,6 +335,7 @@ export class GeminiService {
 		aspectRatio: string,
 		variationLabel: string,
 		productDescription?: string,
+		imageMeta?: ReferenceImageMeta,
 	): Promise<{ data: string | null; error: string | null }> {
 		const MAX_RETRIES = 3;
 		const strategies = ['original', 'simplified', 'minimal'] as const;
@@ -391,6 +357,7 @@ export class GeminiService {
 					undefined,
 					undefined,
 					productDescription,
+					imageMeta,
 				);
 
 				if (result?.data) {
@@ -675,5 +642,104 @@ export class GeminiService {
 
 	getModel(): string {
 		return this.MODEL;
+	}
+
+	// ── Dynamic Reference Image Labeling ────────────────────────────────────
+
+	private buildReferenceInstructions(refCount: number, meta?: ReferenceImageMeta): string {
+		if (refCount === 0) return '';
+
+		const lines: string[] = ['REFERENCE IMAGES PROVIDED:'];
+		let idx = 1;
+
+		if (meta) {
+			const { productImageCount, hasLogo, hasConcept } = meta;
+
+			if (productImageCount >= 1) {
+				lines.push(this.buildProductFrontLabel(idx));
+				idx++;
+			}
+			if (productImageCount >= 2) {
+				lines.push(this.buildProductBackLabel(idx));
+				idx++;
+			}
+			for (let i = 2; i < productImageCount; i++) {
+				lines.push(`- Image ${idx}: PRODUCT REFERENCE ANGLE ${i - 1} — additional product view. Use to understand the product shape, colors, and details from another angle.`);
+				idx++;
+			}
+			if (hasLogo) {
+				lines.push(this.buildLogoLabel(idx));
+				idx++;
+			}
+			if (hasConcept) {
+				lines.push(this.buildConceptLabel(idx));
+				idx++;
+			}
+		} else {
+			if (refCount >= 1) lines.push(this.buildProductFrontLabel(1));
+			if (refCount >= 2) lines.push(this.buildLogoLabel(2));
+			if (refCount >= 3) lines.push(this.buildConceptLabel(3));
+		}
+
+		return lines.join('\n') + '\n\n';
+	}
+
+	private buildProductFrontLabel(idx: number): string {
+		return [
+			`- Image ${idx}: PRODUCT FRONT IMAGE — this is the primary product view.`,
+			'  ═══ PRODUCT RENDERING RULES (CRITICAL) ═══',
+			'  • Render the product LARGE — it should occupy 40–60% of the image area',
+			'  • The product is the HERO of this ad — do NOT shrink it to a small corner',
+			'  • Match the product\'s exact colors, shape, proportions, and material finish from the reference photo',
+			'  • Preserve ALL text on the product packaging (labels, brand name, ingredients, dosage) with PERFECT clarity',
+			'  • Product label text must be SHARP, READABLE, and CORRECTLY SPELLED — never blurred, smeared, or garbled',
+			'  • If the product has small text on the label, render it at a size where it remains legible',
+			'  • Do NOT invent or alter any text on the product packaging — copy it exactly from the reference',
+			'  • The product photo is the MOST IMPORTANT reference — prioritize product accuracy over everything else',
+			'  ═══════════════════════════════════════════',
+		].join('\n');
+	}
+
+	private buildProductBackLabel(idx: number): string {
+		return [
+			`- Image ${idx}: PRODUCT BACK IMAGE — this shows the back/reverse side of the product.`,
+			'  • Use this to understand the product packaging from behind (ingredient lists, barcodes, certifications)',
+			'  • This angle helps ensure accurate 3D understanding of the product shape and material',
+			'  • If the back shows important text (ingredients, certifications), note them for accurate rendering',
+			'  • Do NOT render the back side as the primary view — the FRONT image is the hero',
+		].join('\n');
+	}
+
+	private buildLogoLabel(idx: number): string {
+		return [
+			`- Image ${idx}: BRAND LOGO — use the VISUAL DESIGN (shape, colors, icon style) from this logo image.`,
+			'  CRITICAL: The logo image may contain text from a DIFFERENT brand (placeholder/template).',
+			'  IGNORE any text visible in the logo image. Instead, render the brand name from the',
+			'  CRITICAL BRAND NAME REQUIREMENT section in this prompt. Use ONLY that brand name.',
+			'  Do NOT reproduce "GlowVita", "PREMIUM SKINCARE", or any other text from the logo image.',
+		].join('\n');
+	}
+
+	private buildConceptLabel(idx: number): string {
+		return [
+			`- Image ${idx}: CONCEPT REFERENCE — LAYOUT AND VISUAL STYLE ONLY.`,
+			'',
+			'  ═══ CONTENT ISOLATION RULES (CRITICAL) ═══',
+			'  FROM THE CONCEPT IMAGE, COPY ONLY:',
+			'    • Overall layout structure (where elements are positioned)',
+			'    • Visual style (font types, design aesthetic, element types)',
+			'    • Background style and composition approach',
+			'  FROM THE CONCEPT IMAGE, DO NOT COPY:',
+			'    • ANY text, testimonials, quotes, or written words',
+			'    • ANY product names, brand names, or logos',
+			'    • ANY product claims, feature descriptions, or slogans',
+			'    • ANY product imagery (bottles, containers, packaging)',
+			'    • ANY reviewer names or attribution text',
+			'    • ANY pricing, offers, or promotional text',
+			'  The concept image shows a DIFFERENT product from a DIFFERENT brand.',
+			'  ALL text visible in the concept image belongs to that other product — DO NOT reproduce it.',
+			'  The ONLY text allowed in this ad is from the TEXT RENDERING REQUIREMENTS section below.',
+			'  ═══════════════════════════════════════════',
+		].join('\n');
 	}
 }

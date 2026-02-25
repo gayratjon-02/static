@@ -3,7 +3,7 @@ import { Logger } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { DatabaseService } from '../../database/database.service';
 import { ClaudeService } from '../../libs/services/claude.service';
-import { GeminiService, GeneratedImage } from '../../libs/services/gemini.service';
+import { GeminiService, GeneratedImage, ReferenceImageMeta } from '../../libs/services/gemini.service';
 import { StorageService } from '../../libs/services/storage.service';
 import { PromptValidatorService } from '../../libs/services/prompt-validator.service';
 import { GenerationGateway } from '../../socket/generation.gateway';
@@ -182,15 +182,32 @@ export class GenerationProcessor extends WorkerHost {
 			const prompt9x16 = `${basePrompt}\n\nASPECT RATIO: Vertical/Stories format. Stack elements vertically — product in middle, text at top, CTA at bottom. More vertical whitespace between elements.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
 			const prompt16x9 = `${basePrompt}\n\nASPECT RATIO: Horizontal/Landscape format. Side-by-side layout — text on one side, product on the other. Single line headlines preferred.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
 
-			// Send product photo + brand logo + concept image as reference images
-			const referenceImages = [product.photo_url, brand.logo_url, concept.image_url].filter(Boolean);
-			this.logger.log(`Sending ${referenceImages.length} reference images to Gemini (product: ${!!product.photo_url}, logo: ${!!brand.logo_url}, concept: ${!!concept.image_url})`);
+			// Build product-only images (front + back + references) for Claude analysis
+			const productImageUrls = [
+				product.photo_url,
+				product.back_image_url,
+				...(product.reference_image_urls ?? []),
+			].filter(Boolean);
 
-			// Use pre-computed product description from batch (avoids 6× Claude calls)
-			let productDescription = job.data.product_description || '';
-			if (!productDescription && referenceImages.length > 0) {
+			// Full reference images for Gemini: product images + logo + concept
+			const referenceImages = [
+				...productImageUrls,
+				brand.logo_url,
+				concept.image_url,
+			].filter(Boolean);
+
+			const imageMeta: ReferenceImageMeta = {
+				productImageCount: productImageUrls.length,
+				hasLogo: !!brand.logo_url,
+				hasConcept: !!concept.image_url,
+			};
+
+			this.logger.log(`Sending ${referenceImages.length} reference images to Gemini (product: ${productImageUrls.length}, logo: ${!!brand.logo_url}, concept: ${!!concept.image_url})`);
+
+			let productDescription = job.data.product_description ?? '';
+			if (!productDescription && productImageUrls.length > 0) {
 				try {
-					productDescription = await this.claudeService.analyzeProductImages(referenceImages);
+					productDescription = await this.claudeService.analyzeProductImages(productImageUrls);
 				} catch (err: unknown) {
 					const errMsg = err instanceof Error ? err.message : String(err);
 					this.logger.warn(`Product image analysis failed: ${errMsg} — proceeding without analysis`);
@@ -199,9 +216,9 @@ export class GenerationProcessor extends WorkerHost {
 
 			// Generate all 3 ratios in parallel with retry logic (3 attempts each)
 			const [result1x1, result9x16, result16x9] = await Promise.all([
-				this.geminiService.generateImageWithRetry(prompt1x1, referenceImages, '1:1', `${generated_ad_id}/1:1`, productDescription),
-				this.geminiService.generateImageWithRetry(prompt9x16, referenceImages, '9:16', `${generated_ad_id}/9:16`, productDescription),
-				this.geminiService.generateImageWithRetry(prompt16x9, referenceImages, '16:9', `${generated_ad_id}/16:9`, productDescription),
+				this.geminiService.generateImageWithRetry(prompt1x1, referenceImages, '1:1', `${generated_ad_id}/1:1`, productDescription, imageMeta),
+				this.geminiService.generateImageWithRetry(prompt9x16, referenceImages, '9:16', `${generated_ad_id}/9:16`, productDescription, imageMeta),
+				this.geminiService.generateImageWithRetry(prompt16x9, referenceImages, '16:9', `${generated_ad_id}/16:9`, productDescription, imageMeta),
 			]);
 
 			// 6. Upload all successful results in parallel
@@ -589,20 +606,33 @@ export class GenerationProcessor extends WorkerHost {
 				progress_percent: 35,
 			});
 
-			// Build reference images from snapshots
-			const referenceImages = [
+			// Build product-only images from snapshots (front + back + references)
+			const productImageUrls = [
 				productSnapshot.photo_url,
+				(productSnapshot as Product).back_image_url,
+				...((productSnapshot as Product).reference_image_urls ?? []),
+			].filter(Boolean);
+
+			const referenceImages = [
+				...productImageUrls,
 				brandSnapshot.logo_url,
 			].filter(Boolean);
-			this.logger.log(`Fix-errors: sending ${referenceImages.length} reference images to Gemini`);
 
-			// Analyze product images with Claude Vision
+			const imageMeta: ReferenceImageMeta = {
+				productImageCount: productImageUrls.length,
+				hasLogo: !!brandSnapshot.logo_url,
+				hasConcept: false,
+			};
+
+			this.logger.log(`Fix-errors: sending ${referenceImages.length} reference images to Gemini (product: ${productImageUrls.length}, logo: ${!!brandSnapshot.logo_url})`);
+
 			let productDescription = '';
-			if (referenceImages.length > 0) {
+			if (productImageUrls.length > 0) {
 				try {
-					productDescription = await this.claudeService.analyzeProductImages(referenceImages);
-				} catch (err) {
-					this.logger.warn(`Fix-errors image analysis failed: ${err.message} — proceeding without analysis`);
+					productDescription = await this.claudeService.analyzeProductImages(productImageUrls);
+				} catch (err: unknown) {
+					const errMsg = err instanceof Error ? err.message : String(err);
+					this.logger.warn(`Fix-errors image analysis failed: ${errMsg} — proceeding without analysis`);
 				}
 			}
 
@@ -637,15 +667,15 @@ export class GenerationProcessor extends WorkerHost {
 			const [result1x1, result9x16, result16x9] = await Promise.all([
 				this.geminiService.generateImageWithRetry(
 					`${basePrompt}\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`,
-					referenceImages, '1:1', `fix-${new_ad_id}/1:1`, productDescription,
+					referenceImages, '1:1', `fix-${new_ad_id}/1:1`, productDescription, imageMeta,
 				),
 				this.geminiService.generateImageWithRetry(
 					`${basePrompt}\nCRITICAL: MAINTAIN IDENTICAL colors.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`,
-					referenceImages, '9:16', `fix-${new_ad_id}/9:16`, productDescription,
+					referenceImages, '9:16', `fix-${new_ad_id}/9:16`, productDescription, imageMeta,
 				),
 				this.geminiService.generateImageWithRetry(
 					`${basePrompt}\nCRITICAL: MAINTAIN IDENTICAL colors.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}`,
-					referenceImages, '16:9', `fix-${new_ad_id}/16:9`, productDescription,
+					referenceImages, '16:9', `fix-${new_ad_id}/16:9`, productDescription, imageMeta,
 				),
 			]);
 

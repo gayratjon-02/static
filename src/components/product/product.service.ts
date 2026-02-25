@@ -39,10 +39,12 @@ export class ProductService {
 					name: input.name,
 					description: input.description,
 					usps: input.usps,
-					photo_url: input.photo_url || '',
+					photo_url: input.photo_url ?? '',
+					back_image_url: input.back_image_url ?? '',
+					reference_image_urls: input.reference_image_urls ?? [],
 					has_physical_product: input.has_physical_product ?? false,
-					price_text: input.price_text || '',
-					product_url: input.product_url || '',
+					price_text: input.price_text ?? '',
+					product_url: input.product_url ?? '',
 					star_rating: input.star_rating ?? null,
 					review_count: input.review_count ?? null,
 					ingredients_features: input.ingredients_features || '',
@@ -148,6 +150,7 @@ export class ProductService {
 
 			const fields = [
 				'name', 'description', 'usps', 'photo_url',
+				'back_image_url', 'reference_image_urls',
 				'has_physical_product', 'price_text', 'product_url',
 				'star_rating', 'review_count', 'ingredients_features',
 				'before_description', 'after_description', 'offer_text',

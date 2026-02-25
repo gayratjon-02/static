@@ -36,6 +36,16 @@ export class UpdateProductDto {
 	@IsOptional()
 	photo_url?: string;
 
+	@IsString()
+	@IsOptional()
+	back_image_url?: string;
+
+	@IsArray()
+	@IsOptional()
+	@ArrayMaxSize(5)
+	@IsString({ each: true })
+	reference_image_urls?: string[];
+
 	@IsBoolean()
 	@IsOptional()
 	has_physical_product?: boolean;

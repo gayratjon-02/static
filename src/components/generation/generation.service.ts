@@ -147,10 +147,10 @@ export class GenerationService {
 			let claudeVariations: ClaudeResponseJson[] = [];
 			let productDescription = '';
 
-			const referenceImages = [
+			const productImages = [
 				productData.data?.photo_url,
-				brandData.data?.logo_url,
-				conceptData.data?.image_url,
+				productData.data?.back_image_url,
+				...(productData.data?.reference_image_urls ?? []),
 			].filter(Boolean) as string[];
 
 			try {
@@ -161,10 +161,10 @@ export class GenerationService {
 						brandData.data,
 						productData.data,
 						conceptData.data,
-						important_notes || '',
+						important_notes ?? '',
 					),
-					referenceImages.length > 0
-						? this.claudeService.analyzeProductImages(referenceImages)
+					productImages.length > 0
+						? this.claudeService.analyzeProductImages(productImages)
 						: Promise.resolve(''),
 				]);
 

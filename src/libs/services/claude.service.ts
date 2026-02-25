@@ -312,9 +312,18 @@ Return valid JSON only.`;
 
 		if (imageBlocks.length === 0) return '';
 
-		const analysisPrompt = `You are a professional product photographer and designer analyzing a product image to create a pixel-perfect visual description for advertisement generation. Be EXTREMELY precise and exhaustive.
+		const imageLabels = imageBlocks.map((_, i) => {
+			if (i === 0) return `Image ${i + 1}: FRONT VIEW (primary product photo)`;
+			if (i === 1) return `Image ${i + 1}: BACK VIEW (reverse side of product)`;
+			return `Image ${i + 1}: ADDITIONAL REFERENCE ANGLE`;
+		}).join('\n');
 
-Analyze and describe ALL of the following:
+		const analysisPrompt = `You are a professional product photographer and designer analyzing product images to create a pixel-perfect visual description for advertisement generation. Be EXTREMELY precise and exhaustive.
+
+IMAGE ROLES:
+${imageLabels}
+
+Analyze ALL provided images together and describe the product comprehensively:
 
 SHAPE & STRUCTURE:
 - Overall form (geometric shape, silhouette, outline)
@@ -366,6 +375,12 @@ All text on the packaging MUST be reproduced perfectly in the ad.
 Therefore, transcribe EVERY visible word on the product label with 100% accuracy.
 If a word is partially obscured or hard to read, note it as "[partially visible: best guess]".
 Spell out text character by character for critical elements (product name, brand name).
+
+MULTI-VIEW SYNTHESIS (when multiple images are provided):
+- Use the FRONT view for the primary packaging text, branding, and hero appearance
+- Use the BACK view for ingredient lists, certifications, barcodes, and secondary information
+- Use ADDITIONAL REFERENCE angles for understanding 3D shape, texture, material finish from different perspectives
+- Note any information that is ONLY visible from a specific angle
 
 Output a dense, structured description covering every point above. Do not omit anything visible. This will be used to recreate the product in a photorealistic advertisement.`;
 
@@ -824,7 +839,9 @@ ${brand.competitors ? `Competitors: ${brand.competitors}` : ''}
 Name: ${product.name}
 Description: ${product.description}
 USPs: ${product.usps?.join(', ') || 'N/A'}
-${product.photo_url ? `Product Photo: PROVIDED as reference image — describe WHERE to place it, not WHAT it looks like` : ''}
+${product.photo_url ? `Product Front Photo: PROVIDED as reference image — describe WHERE to place it, not WHAT it looks like` : ''}
+${product.back_image_url ? `Product Back Photo: PROVIDED — use for understanding packaging details from behind` : ''}
+${(product.reference_image_urls?.length ?? 0) > 0 ? `Additional Product Reference Photos: ${product.reference_image_urls.length} additional angle(s) provided` : ''}
 Price: ${product.price_text || 'N/A'}
 Rating: ${product.star_rating ? `${product.star_rating}/5 (${product.review_count || 0} reviews)` : 'N/A'}
 ${product.offer_text ? `Offer: ${product.offer_text}` : ''}
@@ -986,7 +1003,9 @@ ${brand.competitors ? `Competitors: ${brand.competitors}` : ''}
 Name: ${product.name}
 Description: ${product.description}
 USPs: ${product.usps?.join(', ') || 'N/A'}
-${product.photo_url ? `Product Photo: PROVIDED as reference image — describe WHERE to place it, not WHAT it looks like` : ''}
+${product.photo_url ? `Product Front Photo: PROVIDED as reference image — describe WHERE to place it, not WHAT it looks like` : ''}
+${product.back_image_url ? `Product Back Photo: PROVIDED — use for understanding packaging details from behind` : ''}
+${(product.reference_image_urls?.length ?? 0) > 0 ? `Additional Product Reference Photos: ${product.reference_image_urls.length} additional angle(s) provided` : ''}
 Price: ${product.price_text || 'N/A'}
 Rating: ${product.star_rating ? `${product.star_rating}/5 (${product.review_count || 0} reviews)` : 'N/A'}
 ${product.offer_text ? `Offer: ${product.offer_text}` : ''}
