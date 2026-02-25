@@ -68,6 +68,7 @@ export class ProductService {
 				.single();
 
 			if (error || !data) {
+				this.logger.error(`createProduct insert failed: ${error?.message || 'No data returned'}`);
 				throw new InternalServerErrorException(Message.CREATE_FAILED);
 			}
 
