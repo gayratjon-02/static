@@ -6,6 +6,7 @@ import { ClaudeService } from '../../libs/services/claude.service';
 import { GeminiService, GeneratedImage, ReferenceImageMeta } from '../../libs/services/gemini.service';
 import { StorageService } from '../../libs/services/storage.service';
 import { PromptValidatorService } from '../../libs/services/prompt-validator.service';
+import { GenerationRulesService } from '../../libs/services/generation-rules.service';
 import { GenerationGateway } from '../../socket/generation.gateway';
 import { GenerationJobData, FixErrorsJobData, ClaudeResponseJson } from '../../libs/types/generation/generation.type';
 import { GenerationStatus } from '../../libs/enums/generation/generation.enum';
@@ -24,6 +25,7 @@ export class GenerationProcessor extends WorkerHost {
 		private databaseService: DatabaseService,
 		private generationGateway: GenerationGateway,
 		private promptValidator: PromptValidatorService,
+		private generationRules: GenerationRulesService,
 	) {
 		super();
 	}
@@ -106,6 +108,12 @@ export class GenerationProcessor extends WorkerHost {
 					important_notes || '',
 					variation_index || 0, // Pass variation index (default 0)
 				);
+			}
+
+			// 4.5. Dynamic rules validation — CTA, banned claims, word limits
+			const rulesValidation = this.generationRules.validateAdCopy(claudeResponse, brand, product);
+			if (!rulesValidation.valid) {
+				this.logger.warn(`Generation ${generated_ad_id}: Rules violations: ${rulesValidation.errors.join('; ')}`);
 			}
 
 			// 5. Gemini API — generate all 3 ratios in parallel
@@ -572,9 +580,20 @@ export class GenerationProcessor extends WorkerHost {
 				originalAd.image_url_1x1 || undefined, // Pass image for Claude vision analysis
 			);
 
-			// ✅ Validate and clean Claude's fix-errors output
 			const brandSnapshot = originalAd.brand_snapshot || {};
 			const productSnapshot = originalAd.product_snapshot || {};
+
+			// Dynamic rules validation on fix-errors output
+			const fixRulesValidation = this.generationRules.validateAdCopy(
+				claudeResponse,
+				brandSnapshot as Brand,
+				productSnapshot as Product,
+			);
+			if (!fixRulesValidation.valid) {
+				this.logger.warn(`Fix-errors ${new_ad_id}: Rules violations: ${fixRulesValidation.errors.join('; ')}`);
+			}
+
+			// ✅ Validate and clean Claude's fix-errors output
 			const validation = this.promptValidator.validateGeminiPrompt(
 				claudeResponse,
 				{

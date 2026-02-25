@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { DatabaseService } from '../../database/database.service';
+import { GenerationRulesService } from './generation-rules.service';
 import { Brand } from '../types/brand/brand.type';
 import { Product } from '../types/product/product.type';
 import { AdConcept } from '../types/concept/concept.type';
@@ -15,6 +16,7 @@ export class ClaudeService {
 	constructor(
 		private configService: ConfigService,
 		private databaseService: DatabaseService,
+		private readonly generationRulesService: GenerationRulesService,
 	) {
 		this.client = new Anthropic({
 			apiKey: this.configService.get<string>('ANTHROPIC_API_KEY'),
@@ -499,24 +501,18 @@ RULE 3: EVERY REVIEW/TESTIMONIAL MUST BE UNIQUE
 - NEVER repeat the same quote twice in one ad
 - Each callout_texts entry must be ONLY the review text (3-4 words). Do NOT include reviewer names.
   Reviewer names will be assigned automatically by the system.
-- REVIEW TOPIC VARIETY — each review MUST cover a DIFFERENT benefit or angle:
-  * ANXIETY: general relief ("No more stress")
-  * SLEEP: nighttime ("Sleeps all night")
-  * STORMS: storm/noise relief ("Storm fear gone")
-  * EASE: ease of use ("Easy plug forget")
-  * MULTI: multi-pet household ("Both dogs calm")
-  * VET: vet endorsement ("Vet approved this")
-  * SPEED: fast results ("Works in days")
-  * GUESTS: visitor behavior ("Calm with guests")
-  Pick a different topic for each review. Do NOT assign two reviews to the same topic.
+- REVIEW TOPIC VARIETY — each review MUST cover a DIFFERENT benefit or angle.
+  Base review topics on the product's USPs and description — do NOT invent claims.
+  Pick a different benefit for each review. Do NOT assign two reviews to the same topic.
+  Example patterns: ease of use, speed/results, value/quality, recommendation, specific USP benefit.
 - Do NOT write reviews that say the same thing in different words
 - If the ad has N review cards, you MUST provide EXACTLY N unique callout_texts
-- Example callout_texts (text only, NO names):
-  * "No more barking"
-  * "Sleeps all night"
-  * "Storm fear gone"
-  * "Both dogs calm"
-  * "Works in days"
+- Example callout_texts format (text only, NO names):
+  * "Love this product" (3 words)
+  * "Works so well" (3 words)
+  * "Best purchase ever" (3 words)
+  * "Easy to use" (3 words)
+  * "Buying again soon" (3 words)
 
 RULE 4: PRODUCT PHOTO HANDLING
 - The user's actual product photo will be provided to Gemini as a reference image
@@ -565,7 +561,7 @@ RULE 7: KEEP TEXT SHORT — SHORTER TEXT = FEWER SPELLING ERRORS IN IMAGES
     "One Time Setup" → "Easy Setup"
     "Works For All Breeds" → "All Breeds"
     "Safe For Daily Use" → "Safe Daily"
-- CTA button: MAX 3 words (e.g. "Shop Now", "Try Free", "Get Yours").
+- CTA button: MAX 3 words (e.g. "Shop Now", "Add to Cart", "Get Yours").
 
 WORD CHOICE — USE SIMPLE WORDS ONLY:
 The text will be rendered in an AI-generated image. Complex or unusual words WILL be misspelled.
@@ -573,19 +569,18 @@ The text will be rendered in an AI-generated image. Complex or unusual words WIL
 AVOID these words (they WILL be misspelled in image generation):
 - "finally" → use "at last" or just remove it
 - "anxious" / "anxiety" → use "stressed" / "stress"
-- "pheromones" / "pheromone" → use "calming" or "calming scent"
 - "recommended" → use "approved"
 - "comfortable" → use "cozy"
-- "separation" → use "alone"
 - "embarrassing" → use "stressful"
 - "immediately" → use "fast" or "quick"
 - "effortless" → use "easy"
 - "professional" → use "expert"
-- "thunderstorm" → use "storm"
-- "fireworks" → use "loud noise"
-- "veterinarian" → use "vet"
+- Any word 10+ characters → find a shorter synonym
+- Product-specific jargon → use simple everyday equivalent
 
-USE short, common English words: calm, sleep, storm, fear, safe, easy, fast, works, dogs, love, night, home, vet, plug, quiet, bark, stop, help, best, great, free, proof, daily, trust
+GENERAL RULE: Any word that is uncommon, technical, or longer than 8 characters has a high chance of being misspelled by the image generator. Replace with the shortest common synonym.
+
+USE short, common English words: calm, safe, easy, fast, works, love, best, great, proof, daily, trust, clean, fresh, strong, smooth, quick, smart, bold, pure
 
 DO NOT generate reviewer names — they will be assigned automatically. Only provide the review text in callout_texts.
 
@@ -662,7 +657,7 @@ TEXT LENGTH CONSTRAINTS (shorter text = fewer spelling errors in images):
 - headline: MAX 6 words. Use simple, common English words.
 - subheadline: MAX 10 words.
 - callout_texts: ABSOLUTE MAX 4 words per card. Feature badges MAX 2 words.
-- cta_text: MAX 3 words (e.g. "Shop Now", "Try Free", "Get Yours").
+- cta_text: MAX 3 words (e.g. "Shop Now", "Add to Cart", "Get Yours").
 - USE short, common words: calm, sleep, storm, fear, safe, easy, fast, works, love, night, home, vet, plug, quiet, bark, stop, help, best, great, free, proof, daily, trust
 - AVOID words that get misspelled: "finally" → "at last", "anxious" → "stressed", "pheromones" → "calming", "recommended" → "approved", "effortless" → "easy"
 
@@ -872,6 +867,8 @@ The concept image is for a COMPLETELY DIFFERENT product. Extract only the STRUCT
 All claims, features, and text in YOUR output must come ONLY from the PRODUCT and BRAND data above.
 ═══════════════════════════════════════════════════
 
+${this.generationRulesService.buildRulesPromptSection(brand, product)}
+
 === APPROVED PRODUCT CLAIMS ===
 Use ONLY these claims/features in the ad copy — do NOT invent or borrow from the concept image:
 ${product.usps?.map((u, i) => `${i + 1}. ${u}`).join('\n') || '- No specific USPs provided — use the product description above'}
@@ -1026,6 +1023,8 @@ USE from the concept image: visual LAYOUT, element positioning, tone and style.
 DO NOT USE: product claims, brand attributes, testimonial text, pricing, or category-specific language.
 All claims and text must come ONLY from the PRODUCT and BRAND data above.
 ═══════════════════════════════════════════════════
+
+${this.generationRulesService.buildRulesPromptSection(brand, product)}
 
 === APPROVED PRODUCT CLAIMS ===
 Use ONLY these claims in the ad — do NOT borrow from the concept image:

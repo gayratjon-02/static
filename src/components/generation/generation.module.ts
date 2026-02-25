@@ -11,6 +11,7 @@ import { ClaudeService } from '../../libs/services/claude.service';
 import { GeminiService } from '../../libs/services/gemini.service';
 import { StorageService } from '../../libs/services/storage.service';
 import { PromptValidatorService } from '../../libs/services/prompt-validator.service';
+import { GenerationRulesService } from '../../libs/services/generation-rules.service';
 import { GenerationGateway } from '../../socket/generation.gateway';
 import { S3Module } from '../s3/s3.module';
 
@@ -46,6 +47,7 @@ import { S3Module } from '../s3/s3.module';
 		GeminiService,
 		StorageService,
 		PromptValidatorService,
+		GenerationRulesService,
 		GenerationGateway,
 	],
 })
