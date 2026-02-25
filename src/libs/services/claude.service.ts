@@ -336,9 +336,17 @@ MATERIALS & FINISH:
 - Transparency or opacity of each component
 - Any reflective or shiny areas
 
-BRANDING & TEXT:
+BRANDING & TEXT (CRITICAL — describe with maximum precision):
 - Logo: exact position, size relative to product, color, font style
-- Any text or labels on product: exact wording, font style, size, color, placement
+- ALL text on product packaging — transcribe EVERY word EXACTLY as it appears:
+  • Product name/title: exact wording, capitalization, font style
+  • Subtitle/tagline on packaging: exact wording
+  • Ingredient list or feature list: exact wording if readable
+  • Dosage/usage instructions visible on label: exact wording
+  • Weight/volume text (e.g. "60 capsules", "500ml", "8 oz"): exact wording
+  • Certifications or badges on packaging (e.g. "USDA Organic", "Non-GMO", "GMP Certified")
+  • Any small print or fine text visible on the label
+- For EACH text element, describe: exact position on product, approximate font size relative to product, color, font weight (bold/regular/light)
 - Symbols, icons, patterns, engravings, or embossed text
 
 FINE DETAILS:
@@ -351,6 +359,13 @@ SCALE & CONTEXT:
 - Estimated real-world size (small handheld / medium / large)
 - Any scale reference visible (hand, table, common object)
 - Product orientation in image (front view, side, angle, flat lay)
+
+IMPORTANT — PACKAGING TEXT ACCURACY:
+The generated ad will display this product at a LARGE size (40–60% of image area).
+All text on the packaging MUST be reproduced perfectly in the ad.
+Therefore, transcribe EVERY visible word on the product label with 100% accuracy.
+If a word is partially obscured or hard to read, note it as "[partially visible: best guess]".
+Spell out text character by character for critical elements (product name, brand name).
 
 Output a dense, structured description covering every point above. Do not omit anything visible. This will be used to recreate the product in a photorealistic advertisement.`;
 

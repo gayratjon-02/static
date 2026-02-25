@@ -161,7 +161,19 @@ export class GeminiService {
 		const refCount = referenceImageParts?.length || 0;
 		const referenceInstructions = refCount > 0 ? [
 			'REFERENCE IMAGES PROVIDED:',
-			refCount >= 1 ? '- Image 1: PRODUCT IMAGE — this is the actual product. Use this exact product appearance in the ad.' : '',
+			refCount >= 1 ? [
+				'- Image 1: PRODUCT IMAGE — this is the actual product.',
+				'  ═══ PRODUCT RENDERING RULES (CRITICAL) ═══',
+				'  • Render the product LARGE — it should occupy 40–60% of the image area',
+				'  • The product is the HERO of this ad — do NOT shrink it to a small corner',
+				'  • Match the product\'s exact colors, shape, proportions, and material finish from the reference photo',
+				'  • Preserve ALL text on the product packaging (labels, brand name, ingredients, dosage) with PERFECT clarity',
+				'  • Product label text must be SHARP, READABLE, and CORRECTLY SPELLED — never blurred, smeared, or garbled',
+				'  • If the product has small text on the label, render it at a size where it remains legible',
+				'  • Do NOT invent or alter any text on the product packaging — copy it exactly from the reference',
+				'  • The product photo is the MOST IMPORTANT reference — prioritize product accuracy over everything else',
+				'  ═══════════════════════════════════════════',
+			].join('\n') : '',
 			refCount >= 2 ? [
 				'- Image 2: BRAND LOGO — use the VISUAL DESIGN (shape, colors, icon style) from this logo image.',
 				'  CRITICAL: The logo image may contain text from a DIFFERENT brand (placeholder/template).',
@@ -339,10 +351,10 @@ export class GeminiService {
 			}
 		}
 
-		// If Claude pre-analyzed the images, enrich the prompt
+		// If Claude pre-analyzed the images, enrich the prompt with size & clarity instructions
 		let enrichedPrompt = prompt;
 		if (productDescription) {
-			enrichedPrompt = `${prompt}\n\n[PRODUCT VISUAL REFERENCE — render the product EXACTLY as described below, do NOT generate a different-looking product]: ${productDescription}`;
+			enrichedPrompt = `${prompt}\n\n═══ PRODUCT VISUAL REFERENCE (HIGHEST PRIORITY) ═══\nRender the product EXACTLY as described below — do NOT generate a different-looking product.\nThe product must be LARGE and PROMINENT — occupy 40–60% of the image area.\nALL text visible on the product packaging (labels, brand name, ingredients) must be:\n  • PIXEL-PERFECT — sharp edges, no blur, no smearing\n  • CORRECTLY SPELLED — copy every letter exactly from the description\n  • READABLE at the rendered size — if text would be too small to read, scale the product up\nDo NOT invent, alter, or garble any packaging text.\n\nProduct details:\n${productDescription}\n═══════════════════════════════════════════════════`;
 		}
 
 		return this.generateImage(enrichedPrompt, undefined, aspectRatio, resolution, userApiKey, imageParts.length > 0 ? imageParts : undefined);
