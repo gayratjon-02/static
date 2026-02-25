@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { DatabaseService } from '../../database/database.service';
+import { ProductScraperService } from '../../libs/services/product-scraper.service';
 import { CreateProductDto } from '../../libs/dto/product/create-product.dto';
 import { UpdateProductDto } from '../../libs/dto/product/update-product.dto';
 import { Message } from '../../libs/enums/common.enum';
@@ -7,10 +8,21 @@ import { T } from '../../libs/types/common';
 import { Product } from '../../libs/types/product/product.type';
 import { Member } from '../../libs/types/member/member.type';
 
+export interface ProductImportResult {
+	name: string;
+	description: string;
+	product_url: string;
+	price_text: string;
+	image_urls: string[];
+}
+
 @Injectable()
 export class ProductService {
 	private readonly logger = new Logger('ProductService');
-	constructor(private databaseService: DatabaseService) { }
+	constructor(
+		private readonly databaseService: DatabaseService,
+		private readonly productScraperService: ProductScraperService,
+	) { }
 
 	// createProduct method
 	public async createProduct(input: CreateProductDto, authMember: Member): Promise<Product> {
@@ -215,88 +227,25 @@ export class ProductService {
 		}
 	}
 
-	/**
-	 * Import product data from a website URL.
-	 * Fetches HTML, extracts: name, description, price, photo.
-	 */
-	public async importFromUrl(url: string) {
-		this.logger.log(`Importing product from URL: ${url}`);
+	async importFromUrl(url: string): Promise<ProductImportResult> {
+		console.log('ProductService: importFromUrl');
 
 		try {
-			// Normalize URL
+			const scraped = await this.productScraperService.scrape(url);
+
 			let normalizedUrl = url.trim();
 			if (!normalizedUrl.startsWith('http://') && !normalizedUrl.startsWith('https://')) {
 				normalizedUrl = `https://${normalizedUrl}`;
 			}
 
-			// Fetch HTML with timeout
-			const controller = new AbortController();
-			const timeout = setTimeout(() => controller.abort(), 10000);
-			const response = await fetch(normalizedUrl, {
-				signal: controller.signal,
-				headers: {
-					'User-Agent': 'Mozilla/5.0 (compatible; StaticEngine/1.0; Product Import)',
-					'Accept': 'text/html,application/xhtml+xml',
-				},
-			});
-			clearTimeout(timeout);
-
-			if (!response.ok) {
-				throw new BadRequestException(`Website returned ${response.status}`);
-			}
-
-			const html = await response.text();
-			const baseUrl = new URL(normalizedUrl);
-
-			// ── Extract product name ──
-			// Try OG title first, then regular title
-			const ogTitleMatch = html.match(/<meta[^>]*property=["']og:title["'][^>]*content=["']([\s\S]*?)["']/i);
-			const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-			let name = ogTitleMatch?.[1] || titleMatch?.[1] || baseUrl.pathname.split('/').pop() || 'Imported Product';
-			name = name.split(/\s*[|\-–—]\s*/)[0].trim().replace(/_/g, ' ');
-			if (name.length > 100) name = name.substring(0, 100);
-
-			// ── Extract description ──
-			const ogDescMatch = html.match(/<meta[^>]*property=["']og:description["'][^>]*content=["']([\s\S]*?)["']/i);
-			const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([\s\S]*?)["']/i)
-				|| html.match(/<meta[^>]*content=["']([\s\S]*?)["'][^>]*name=["']description["']/i);
-			let description = ogDescMatch?.[1] || descMatch?.[1] || '';
-			description = description.trim().substring(0, 500);
-
-			// ── Extract photo URL ──
-			let photo_url = '';
-			const ogImageMatch = html.match(/<meta[^>]*property=["']og:image["'][^>]*content=["']([\s\S]*?)["']/i);
-			const twitterImageMatch = html.match(/<meta[^>]*name=["']twitter:image["'][^>]*content=["']([\s\S]*?)["']/i);
-			const rawPhoto = ogImageMatch?.[1] || twitterImageMatch?.[1] || '';
-
-			if (rawPhoto) {
-				try {
-					photo_url = new URL(rawPhoto, normalizedUrl).href;
-				} catch {
-					photo_url = rawPhoto;
-				}
-			}
-
-			// ── Extract price (Basic heuristics) ──
-			let price_text = '';
-			// Look for common price patterns like $19.99, £20, €15.50 in meta tags
-			const priceAmountMatch = html.match(/<meta[^>]*property=["']product:price:amount["'][^>]*content=["']([\d.]+)["']/i);
-			const priceCurrencyMatch = html.match(/<meta[^>]*property=["']product:price:currency["'][^>]*content=["']([A-Z]{3})["']/i);
-
-			if (priceAmountMatch) {
-				const amount = priceAmountMatch[1];
-				const curr = priceCurrencyMatch?.[1] || '$';
-				price_text = curr === 'USD' ? `$${amount}` : `${amount} ${curr}`;
-			}
-
-			this.logger.log(`Import complete: "${name}" | photo: ${photo_url ? 'found' : 'none'}`);
+			this.logger.log(`Import complete: "${scraped.name}" | images: ${scraped.image_urls.length}`);
 
 			return {
-				name,
-				description,
+				name: scraped.name,
+				description: scraped.description,
 				product_url: normalizedUrl,
-				photo_url,
-				price_text,
+				price_text: scraped.price_text,
+				image_urls: scraped.image_urls,
 			};
 		} catch (err) {
 			if (err instanceof BadRequestException) throw err;
