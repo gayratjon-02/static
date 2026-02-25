@@ -384,7 +384,14 @@ MULTI-VIEW SYNTHESIS (when multiple images are provided):
 - Use ADDITIONAL REFERENCE angles for understanding 3D shape, texture, material finish from different perspectives
 - Note any information that is ONLY visible from a specific angle
 
-Output a dense, structured description covering every point above. Do not omit anything visible. This will be used to recreate the product in a photorealistic advertisement.`;
+PRODUCT FIDELITY (CRITICAL):
+- This description will be used to reproduce the product EXACTLY in an ad
+- The ad must show ONLY what is in the product photo — no extra items, props, or embellishments
+- Describe ONLY what you actually see — do NOT suggest additions like "could be shown with..."
+- If the product includes packaging (box, pouch, wrapper), describe it as part of the product
+- Do NOT describe surrounding context, props, or staging — ONLY the product itself
+
+Output a dense, structured description covering every point above. Do not omit anything visible. This will be used to recreate the product EXACTLY as photographed in a photorealistic advertisement — nothing added, nothing removed.`;
 
 		const messageContent = [
 			...imageBlocks,
@@ -514,12 +521,17 @@ RULE 3: EVERY REVIEW/TESTIMONIAL MUST BE UNIQUE
   * "Easy to use" (3 words)
   * "Buying again soon" (3 words)
 
-RULE 4: PRODUCT PHOTO HANDLING
+RULE 4: PRODUCT PHOTO HANDLING — FIDELITY IS ABSOLUTE
 - The user's actual product photo will be provided to Gemini as a reference image
 - In your prompt, describe WHERE to place the product photo, do NOT describe what the product looks like
 - Say: "Place the provided product photo in the center-right of the composition"
 - Do NOT say: "A white cylindrical diffuser device plugged into a wall outlet" — this makes Gemini generate a fake product
 - The goal is for Gemini to USE the actual photo, not create an AI-imagined version
+- CRITICAL: Gemini must draw ONLY what is in the product photo — NOTHING EXTRA
+- Do NOT ask Gemini to add: extra product units, floating ingredients, splashes, powder, smoke, props, figurines, mascots, animals, scattered pills/capsules, leaves, flowers, or decorative objects
+- If the product has packaging (box, pouch, wrapper), it must be drawn AS-IS — do NOT remove or alter it
+- In your gemini_image_prompt, include: "Draw ONLY what is in the product reference photo. Do NOT add any objects, props, or decorations that are not in the original product photo."
+- The product in the ad must be a FAITHFUL reproduction of the reference, not an idealized or embellished version
 
 RULE 5: LOGO HANDLING
 - The user's actual brand logo will be provided as a separate reference image
@@ -724,7 +736,7 @@ RULE 3: EVERY REVIEW/TESTIMONIAL MUST BE UNIQUE
 - Each review must cover a DIFFERENT benefit or angle — do NOT say the same thing in different words
 - If the ad has N review cards, provide EXACTLY N unique callout_texts
 
-RULE 4: PRODUCT PHOTO — The actual photo will be provided to Gemini. Describe WHERE to place it, do NOT describe what it looks like.
+RULE 4: PRODUCT PHOTO — The actual photo will be provided to Gemini. Describe WHERE to place it, do NOT describe what it looks like. CRITICAL: Gemini must draw ONLY what is in the product photo — no extra objects, props, figurines, splashes, floating ingredients, or decorative elements. If the product has packaging (box, pouch), keep it AS-IS. Include in gemini_image_prompt: "Draw ONLY what is in the product reference photo — no additions."
 
 RULE 5: LOGO — The actual logo will be provided to Gemini. Say "Place the provided brand logo" — do NOT describe or recreate it.
 
@@ -790,6 +802,9 @@ ALL variations MUST follow this base layout:
 
 2. **MIDDLE SECTION**:
    - Place the PROVIDED PRODUCT PHOTO centered (do NOT generate a fake product image)
+   - Draw ONLY the product as it appears in the reference photo — NO extra objects, props, figurines, splashes, or decorative elements
+   - If the product has packaging (box, pouch), keep it AS-IS — do NOT remove or alter it
+   - Do NOT add floating ingredients, scattered pills, smoke, or embellishments around the product
    - NO small unreadable packaging text on the product — clean label only
    - Behind the product: 3–5 review cards (white bg, soft shadow, slight angle max 15°)
    - Each card: 5 bright yellow/gold stars + short UNIQUE testimonial (max 8 words) + first name + last initial

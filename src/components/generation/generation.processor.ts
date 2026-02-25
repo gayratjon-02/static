@@ -403,7 +403,17 @@ export class GenerationProcessor extends WorkerHost {
 			'If the concept reference image shows a DIFFERENT product (different name, different category, different claims) — DO NOT copy any of that content.',
 			'The concept image is for LAYOUT/STYLE reference ONLY — its text, product imagery, and claims belong to a different product.',
 			'Render ONLY the text provided in the TEXT RENDERING REQUIREMENTS section below.',
-			'═══════════════════════',
+			'',
+			'═══ PRODUCT IMAGE FIDELITY (ABSOLUTE RULE) ═══',
+			'Draw the product EXACTLY as it appears in the product reference photo — NOTHING MORE.',
+			'Do NOT add ANY objects that are not in the product reference photo:',
+			'  - No extra product units, no figurines, no mascots, no animals',
+			'  - No floating ingredients, no splashes, no powder, no smoke effects',
+			'  - No props, no accessories, no decorative objects, no scattered items',
+			'  - No leaves, flowers, fruits, or natural elements unless in the original photo',
+			'If the product has a box/packaging, draw it EXACTLY as shown — do NOT remove or redesign it.',
+			'The product must be a FAITHFUL reproduction of the reference photo, not an enhanced version.',
+			'═══════════════════════════════════════════════',
 			'',
 		];
 		return lines.join('\n');
