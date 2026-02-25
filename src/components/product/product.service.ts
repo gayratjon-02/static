@@ -14,6 +14,11 @@ export interface ProductImportResult {
 	product_url: string;
 	price_text: string;
 	image_urls: string[];
+	usps: string[];
+	star_rating: number | null;
+	review_count: number | null;
+	offer_text: string;
+	ingredients_features: string;
 }
 
 @Injectable()
@@ -247,6 +252,11 @@ export class ProductService {
 				product_url: normalizedUrl,
 				price_text: scraped.price_text,
 				image_urls: scraped.image_urls,
+				usps: scraped.usps,
+				star_rating: scraped.star_rating,
+				review_count: scraped.review_count,
+				offer_text: scraped.offer_text,
+				ingredients_features: scraped.ingredients_features,
 			};
 		} catch (err) {
 			if (err instanceof BadRequestException) throw err;

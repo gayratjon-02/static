@@ -6,7 +6,27 @@ export interface ScrapedProduct {
 	description: string;
 	price_text: string;
 	image_urls: string[];
+	usps: string[];
+	star_rating: number | null;
+	review_count: number | null;
+	offer_text: string;
 	ingredients_features: string;
+}
+
+interface JsonLdProduct {
+	images: string[];
+	description: string;
+	starRating: number | null;
+	reviewCount: number | null;
+	offerText: string;
+}
+
+interface ShopifyApiData {
+	images: string[];
+	description: string;
+	usps: string[];
+	priceText: string;
+	offerText: string;
 }
 
 type Platform = 'shopify' | 'woocommerce' | 'generic';
@@ -99,35 +119,46 @@ export class ProductScraperService {
 		const { html, finalUrl } = fetched;
 		const $ = cheerio.load(html);
 
-		const images = await this.tryShopifyJsonApi(finalUrl);
-
 		const meta = this.extractMeta($, finalUrl);
+		const jsonLd = this.extractJsonLd($, finalUrl);
+		const shopifyApi = await this.tryShopifyJsonApi(finalUrl);
+		const details = this.extractProductDetails($);
 
-		if (images.length === 0) {
+		const images: string[] = [];
+		if (shopifyApi?.images.length) {
+			images.push(...shopifyApi.images);
+		} else {
 			const htmlImages = this.extractShopifyHtmlImages($, finalUrl);
 			images.push(...htmlImages);
 		}
+		if (jsonLd.images.length) images.push(...jsonLd.images);
+		if (images.length === 0 && meta.ogImage) images.push(meta.ogImage);
 
-		if (images.length === 0 && meta.ogImage) {
-			images.push(meta.ogImage);
-		}
+		const description = shopifyApi?.description || meta.description || jsonLd.description;
+		const usps = shopifyApi?.usps.length ? shopifyApi.usps : details.usps;
+		const priceText = shopifyApi?.priceText || meta.price;
+		const offerText = shopifyApi?.offerText || jsonLd.offerText;
 
 		return {
 			name: meta.name,
-			description: meta.description,
-			price_text: meta.price,
+			description,
+			price_text: priceText,
 			image_urls: this.deduplicateUrls(images),
-			ingredients_features: '',
+			usps,
+			star_rating: jsonLd.starRating,
+			review_count: jsonLd.reviewCount,
+			offer_text: offerText,
+			ingredients_features: details.ingredients,
 		};
 	}
 
-	private async tryShopifyJsonApi(pageUrl: string): Promise<string[]> {
+	private async tryShopifyJsonApi(pageUrl: string): Promise<ShopifyApiData | null> {
 		try {
 			const url = new URL(pageUrl);
 			const pathParts = url.pathname.split('/').filter(Boolean);
 
 			const productsIdx = pathParts.indexOf('products');
-			if (productsIdx === -1 || productsIdx >= pathParts.length - 1) return [];
+			if (productsIdx === -1 || productsIdx >= pathParts.length - 1) return null;
 
 			const handle = pathParts[productsIdx + 1].split('?')[0];
 			const jsonUrl = `${url.origin}/products/${handle}.json`;
@@ -141,18 +172,48 @@ export class ProductScraperService {
 			});
 			clearTimeout(timeout);
 
-			if (!response.ok) return [];
+			if (!response.ok) return null;
 
 			const data = await response.json();
 			const product = data?.product;
-			if (!product?.images?.length) return [];
+			if (!product) return null;
 
-			return product.images
+			const images = (product.images ?? [])
 				.map((img: { src?: string }) => img.src)
 				.filter(Boolean)
 				.map((src: string) => src.replace(/\?v=\d+/, ''));
+
+			const bodyHtml = product.body_html ?? '';
+			const description = this.stripHtml(bodyHtml).substring(0, 500);
+
+			const usps: string[] = [];
+			if (bodyHtml) {
+				const $body = cheerio.load(bodyHtml);
+				$body('li').each((_, el) => {
+					if (usps.length >= 5) return;
+					const text = $body(el).text().replace(/\s+/g, ' ').trim();
+					if (text.length >= 10 && text.length <= 150) {
+						usps.push(text);
+					}
+				});
+			}
+
+			let priceText = '';
+			let offerText = '';
+			const variant = product.variants?.[0];
+			if (variant) {
+				const price = variant.price;
+				const compareAt = variant.compare_at_price;
+				if (price) priceText = `$${price}`;
+				if (compareAt && parseFloat(compareAt) > parseFloat(price)) {
+					const discount = Math.round(((parseFloat(compareAt) - parseFloat(price)) / parseFloat(compareAt)) * 100);
+					offerText = `Save ${discount}% (was $${compareAt})`;
+				}
+			}
+
+			return { images, description, usps, priceText, offerText };
 		} catch {
-			return [];
+			return null;
 		}
 	}
 
@@ -181,10 +242,12 @@ export class ProductScraperService {
 		const $ = cheerio.load(html);
 
 		const meta = this.extractMeta($, finalUrl);
+		const jsonLd = this.extractJsonLd($, finalUrl);
+		const details = this.extractProductDetails($);
 		const images: string[] = [];
 
 		$('.woocommerce-product-gallery__image img, .woocommerce-product-gallery img').each((_, el) => {
-			const src = $(el).attr('data-large_image') || $(el).attr('data-src') || $(el).attr('src');
+			const src = $(el).attr('data-large_image') ?? $(el).attr('data-src') ?? $(el).attr('src');
 			if (src && !src.includes('placeholder')) {
 				images.push(this.resolveUrl(src, finalUrl));
 			}
@@ -192,23 +255,34 @@ export class ProductScraperService {
 
 		if (images.length === 0) {
 			$('.wp-post-image, .attachment-shop_single, .product-image img').each((_, el) => {
-				const src = $(el).attr('src') || $(el).attr('data-src');
+				const src = $(el).attr('src') ?? $(el).attr('data-src');
 				if (src && !src.includes('placeholder')) {
 					images.push(this.resolveUrl(src, finalUrl));
 				}
 			});
 		}
 
-		if (images.length === 0 && meta.ogImage) {
-			images.push(meta.ogImage);
+		if (jsonLd.images.length) images.push(...jsonLd.images);
+		if (images.length === 0 && meta.ogImage) images.push(meta.ogImage);
+
+		let offerText = jsonLd.offerText;
+		if (!offerText) {
+			const saleEl = $('.onsale, [class*="sale-badge"], [class*="discount"]').first();
+			if (saleEl.length) {
+				offerText = saleEl.text().replace(/\s+/g, ' ').trim().substring(0, 100);
+			}
 		}
 
 		return {
 			name: meta.name,
-			description: meta.description,
+			description: meta.description || jsonLd.description,
 			price_text: meta.price,
 			image_urls: this.deduplicateUrls(images),
-			ingredients_features: '',
+			usps: details.usps,
+			star_rating: jsonLd.starRating,
+			review_count: jsonLd.reviewCount,
+			offer_text: offerText,
+			ingredients_features: details.ingredients,
 		};
 	}
 
@@ -219,17 +293,18 @@ export class ProductScraperService {
 		const $ = cheerio.load(html);
 
 		const meta = this.extractMeta($, finalUrl);
+		const jsonLd = this.extractJsonLd($, finalUrl);
+		const details = this.extractProductDetails($);
 		const images: string[] = [];
 
-		const jsonLdImages = this.extractJsonLdImages($, finalUrl);
-		images.push(...jsonLdImages);
+		images.push(...jsonLd.images);
 
 		if (meta.ogImage) {
 			images.push(meta.ogImage);
 		}
 
 		const twitterImage = $('meta[name="twitter:image"]').attr('content')
-			|| $('meta[name="twitter:image:src"]').attr('content');
+			?? $('meta[name="twitter:image:src"]').attr('content');
 		if (twitterImage) {
 			images.push(this.resolveUrl(twitterImage, finalUrl));
 		}
@@ -240,7 +315,7 @@ export class ProductScraperService {
 		});
 
 		$('[data-gallery] img, .product-gallery img, .product-images img, .pdp-image img, .gallery-image img').each((_, el) => {
-			const src = $(el).attr('data-src') || $(el).attr('data-zoom-image') || $(el).attr('src');
+			const src = $(el).attr('data-src') ?? $(el).attr('data-zoom-image') ?? $(el).attr('src');
 			if (src && this.isProductImage(src)) {
 				images.push(this.resolveUrl(src, finalUrl));
 			}
@@ -249,9 +324,9 @@ export class ProductScraperService {
 		if (images.length === 0) {
 			$('img[src]').each((_, el) => {
 				const src = $(el).attr('src')!;
-				const alt = ($(el).attr('alt') || '').toLowerCase();
-				const width = parseInt($(el).attr('width') || '0', 10);
-				const height = parseInt($(el).attr('height') || '0', 10);
+				const alt = ($(el).attr('alt') ?? '').toLowerCase();
+				const width = parseInt($(el).attr('width') ?? '0', 10);
+				const height = parseInt($(el).attr('height') ?? '0', 10);
 
 				if (
 					this.isProductImage(src) &&
@@ -268,23 +343,41 @@ export class ProductScraperService {
 			});
 		}
 
+		let offerText = jsonLd.offerText;
+		if (!offerText) {
+			const saleEl = $('[class*="sale"], [class*="discount"], [class*="offer"], [class*="save"]').first();
+			if (saleEl.length) {
+				offerText = saleEl.text().replace(/\s+/g, ' ').trim().substring(0, 100);
+			}
+		}
+
 		return {
 			name: meta.name,
-			description: meta.description,
+			description: meta.description || jsonLd.description,
 			price_text: meta.price,
 			image_urls: this.deduplicateUrls(images).slice(0, 10),
-			ingredients_features: '',
+			usps: details.usps,
+			star_rating: jsonLd.starRating,
+			review_count: jsonLd.reviewCount,
+			offer_text: offerText,
+			ingredients_features: details.ingredients,
 		};
 	}
 
 	// ── JSON-LD ──────────────────────────────────────────
 
-	private extractJsonLdImages($: cheerio.CheerioAPI, baseUrl: string): string[] {
-		const images: string[] = [];
+	private extractJsonLd($: cheerio.CheerioAPI, baseUrl: string): JsonLdProduct {
+		const result: JsonLdProduct = {
+			images: [],
+			description: '',
+			starRating: null,
+			reviewCount: null,
+			offerText: '',
+		};
 
 		$('script[type="application/ld+json"]').each((_, el) => {
 			try {
-				const json = JSON.parse($(el).html() || '');
+				const json = JSON.parse($(el).html() ?? '');
 				const items = Array.isArray(json) ? json : [json];
 
 				for (const item of items) {
@@ -292,18 +385,97 @@ export class ProductScraperService {
 
 					const imgField = item.image;
 					if (typeof imgField === 'string') {
-						images.push(this.resolveUrl(imgField, baseUrl));
+						result.images.push(this.resolveUrl(imgField, baseUrl));
 					} else if (Array.isArray(imgField)) {
 						for (const img of imgField) {
-							const src = typeof img === 'string' ? img : img?.url || img?.contentUrl;
-							if (src) images.push(this.resolveUrl(src, baseUrl));
+							const src = typeof img === 'string' ? img : img?.url ?? img?.contentUrl;
+							if (src) result.images.push(this.resolveUrl(src, baseUrl));
+						}
+					}
+
+					if (item.description && !result.description) {
+						result.description = this.stripHtml(String(item.description)).substring(0, 500);
+					}
+
+					const rating = item.aggregateRating;
+					if (rating) {
+						const ratingValue = parseFloat(rating.ratingValue);
+						if (!isNaN(ratingValue) && ratingValue >= 1 && ratingValue <= 5) {
+							result.starRating = Math.round(ratingValue * 10) / 10;
+						}
+						const reviewCount = parseInt(rating.reviewCount ?? rating.ratingCount, 10);
+						if (!isNaN(reviewCount) && reviewCount > 0) {
+							result.reviewCount = reviewCount;
+						}
+					}
+
+					const offers = item.offers;
+					if (offers) {
+						const offerList = Array.isArray(offers) ? offers : [offers];
+						for (const offer of offerList) {
+							const price = parseFloat(offer.price);
+							const highPrice = parseFloat(offer.highPrice);
+							if (!isNaN(price) && !isNaN(highPrice) && highPrice > price) {
+								const discount = Math.round(((highPrice - price) / highPrice) * 100);
+								result.offerText = `Save ${discount}%`;
+								break;
+							}
 						}
 					}
 				}
-			} catch { }
+			} catch { /* malformed JSON-LD */ }
 		});
 
-		return images;
+		return result;
+	}
+
+	// ── Product Details ─────────────────────────────────
+
+	private extractProductDetails($: cheerio.CheerioAPI): { usps: string[]; ingredients: string } {
+		const usps: string[] = [];
+
+		const descSelectors = [
+			'.product-description ul li',
+			'.product__description ul li',
+			'.product-single__description ul li',
+			'.woocommerce-product-details__short-description ul li',
+			'[class*="product-detail"] ul li',
+			'[class*="feature"] li',
+			'[class*="benefit"] li',
+			'[class*="highlight"] li',
+			'[class*="selling-point"] li',
+		];
+
+		for (const selector of descSelectors) {
+			if (usps.length >= 5) break;
+			$(selector).each((_, el) => {
+				if (usps.length >= 5) return;
+				const text = $(el).text().replace(/\s+/g, ' ').trim();
+				if (text.length >= 10 && text.length <= 150) {
+					usps.push(text);
+				}
+			});
+		}
+
+		let ingredients = '';
+		const ingredientSelectors = [
+			'[id*="ingredient"]',
+			'[class*="ingredient"]',
+			'[id*="specification"]',
+			'[class*="specification"]',
+			'.woocommerce-Tabs-panel--additional_information',
+			'[class*="nutrition"]',
+		];
+
+		for (const selector of ingredientSelectors) {
+			if (ingredients) break;
+			const el = $(selector).first();
+			if (el.length) {
+				ingredients = el.text().replace(/\s+/g, ' ').trim().substring(0, 500);
+			}
+		}
+
+		return { usps, ingredients };
 	}
 
 	// ── Meta Extraction ──────────────────────────────────
@@ -313,13 +485,35 @@ export class ProductScraperService {
 
 		const ogTitle = $('meta[property="og:title"]').attr('content');
 		const pageTitle = $('title').text();
-		let name = ogTitle || pageTitle || baseUrlObj.pathname.split('/').pop() || 'Imported Product';
+		let name = ogTitle ?? pageTitle ?? baseUrlObj.pathname.split('/').pop() ?? 'Imported Product';
 		name = name.split(/\s*[|\-–—]\s*/)[0].trim().replace(/_/g, ' ');
 		if (name.length > 100) name = name.substring(0, 100);
 
 		const ogDesc = $('meta[property="og:description"]').attr('content');
 		const metaDesc = $('meta[name="description"]').attr('content');
-		let description = ogDesc || metaDesc || '';
+		let description = ogDesc ?? metaDesc ?? '';
+
+		const fullDescSelectors = [
+			'.product-description',
+			'.product__description',
+			'.product-single__description',
+			'[id*="product-description"]',
+			'[class*="pdp-description"]',
+			'.woocommerce-product-details__short-description',
+			'[itemprop="description"]',
+		];
+
+		for (const selector of fullDescSelectors) {
+			const el = $(selector).first();
+			if (el.length) {
+				const fullDesc = el.text().replace(/\s+/g, ' ').trim();
+				if (fullDesc.length > description.length) {
+					description = fullDesc;
+				}
+				break;
+			}
+		}
+
 		description = description.trim().substring(0, 500);
 
 		let ogImage = '';
@@ -332,8 +526,16 @@ export class ProductScraperService {
 		const priceAmount = $('meta[property="product:price:amount"]').attr('content');
 		const priceCurrency = $('meta[property="product:price:currency"]').attr('content');
 		if (priceAmount) {
-			const curr = priceCurrency || '$';
+			const curr = priceCurrency ?? '$';
 			price = curr === 'USD' ? `$${priceAmount}` : `${priceAmount} ${curr}`;
+		}
+
+		if (!price) {
+			const priceEl = $('[class*="price"] .money, [class*="price"] ins, .product-price, [itemprop="price"]').first();
+			if (priceEl.length) {
+				const priceText = priceEl.text().replace(/\s+/g, ' ').trim();
+				if (priceText && priceText.length <= 30) price = priceText;
+			}
 		}
 
 		return { name, description, ogImage, price };
@@ -357,6 +559,10 @@ export class ProductScraperService {
 		if (lower.includes('tracking') || lower.includes('pixel') || lower.includes('spacer')) return false;
 		if (lower.includes('1x1') || lower.includes('blank')) return false;
 		return true;
+	}
+
+	private stripHtml(html: string): string {
+		return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
 	}
 
 	private deduplicateUrls(urls: string[]): string[] {
