@@ -4,7 +4,7 @@ import { AuthService } from '../auth/auth.service';
 import { DatabaseService } from '../../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
-import { LoginDto } from '../../libs/dto/member/login.dto';
+import { GoogleLoginDto, LoginDto } from '../../libs/dto/member/login.dto';
 import { AdminSignupDto } from '../../libs/dto/admin/admin-signup.dto';
 import { AdminLoginDto } from '../../libs/dto/admin/admin-login.dto';
 import { AdminGetUsersQueryDto } from '../../libs/dto/admin/admin-get-users-query.dto';
@@ -39,6 +39,11 @@ export class MemberService {
 	async login(input: LoginDto): Promise<AuthResponse> {
 		console.log('MemberService: login');
 		return this.authService.login(input);
+	}
+
+	async googleLogin(input: GoogleLoginDto): Promise<AuthResponse> {
+		console.log('MemberService: googleLogin');
+		return this.authService.googleLogin(input);
 	}
 
 	async adminLogin(input: AdminLoginDto): Promise<AdminAuthResponse> {

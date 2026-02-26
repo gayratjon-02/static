@@ -10,3 +10,9 @@ export class LoginDto {
 	@IsNotEmpty()
 	password: string;
 }
+
+export class GoogleLoginDto {
+	@IsString()
+	@IsNotEmpty()
+	id_token: string;
+}

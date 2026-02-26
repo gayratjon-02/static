@@ -3,26 +3,129 @@ import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
-import { LoginDto } from '../../libs/dto/member/login.dto';
+import { GoogleLoginDto, LoginDto } from '../../libs/dto/member/login.dto';
 import { AdminSignupDto } from '../../libs/dto/admin/admin-signup.dto';
 import { AdminLoginDto } from '../../libs/dto/admin/admin-login.dto';
 import { AuthResponse, Member, TokenPayload } from '../../libs/types/member/member.type';
 import { AdminAuthResponse, AdminMember, AdminTokenPayload } from '../../libs/types/admin/admin.type';
-import { MemberStatus, Message, SubscriptionStatus, SubscriptionTier } from '../../libs/enums/common.enum';
+import { MemberAuthType, MemberStatus, Message, SubscriptionStatus, SubscriptionTier } from '../../libs/enums/common.enum';
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcryptjs';
+import { OAuth2Client } from 'google-auth-library';
 
 const FREE_CREDITS_LIMIT = 25;
 
 @Injectable()
 export class AuthService {
+	private readonly googleClient: OAuth2Client;
+
 	constructor(
 		private readonly configService: ConfigService,
 		private readonly databaseService: DatabaseService,
 		private readonly emailService: EmailService,
-	) {}
+	) {
+		this.googleClient = new OAuth2Client(this.configService.get<string>('GOOGLE_CLIENT_ID'));
+	}
 
 	// ── USER AUTH ────────────────────────────────────────────────
+
+	async googleLogin(input: GoogleLoginDto): Promise<AuthResponse> {
+		console.log('AuthService: googleLogin');
+
+		const ticket = await this.googleClient.verifyIdToken({
+			idToken: input.id_token,
+			audience: this.configService.get<string>('GOOGLE_CLIENT_ID'),
+		}).catch(() => {
+			throw new BadRequestException(Message.GOOGLE_AUTH_FAILED);
+		});
+
+		const payload = ticket.getPayload();
+		if (!payload) throw new BadRequestException(Message.GOOGLE_AUTH_FAILED);
+		if (!payload.email_verified) throw new BadRequestException(Message.GOOGLE_EMAIL_NOT_VERIFIED);
+
+		const email = payload.email!;
+		const full_name = payload.name ?? '';
+		const avatar_url = payload.picture ?? '';
+
+		const { data: existingUser } = await this.databaseService.client
+			.from('users')
+			.select('*')
+			.eq('email', email)
+			.single();
+
+		if (existingUser) {
+			if (existingUser.member_status === MemberStatus.SUSPENDED) {
+				throw new BadRequestException(Message.ACCOUNT_SUSPENDED);
+			}
+
+			if (existingUser.member_status === MemberStatus.DELETED) {
+				const { data: reactivated, error } = await this.databaseService.client
+					.from('users')
+					.update({
+						full_name,
+						avatar_url,
+						auth_type: MemberAuthType.GOOGLE,
+						password_hash: null,
+						member_status: MemberStatus.ACTIVE,
+						subscription_tier: SubscriptionTier.FREE,
+						credits_used: 0,
+						credits_limit: FREE_CREDITS_LIMIT,
+						addon_credits_remaining: 0,
+						updated_at: new Date(),
+					})
+					.eq('_id', existingUser._id)
+					.select()
+					.single();
+
+				if (error || !reactivated) throw new BadRequestException(Message.GOOGLE_AUTH_FAILED);
+
+				const accessToken = this.createToken({
+					id: reactivated._id,
+					subscription_tier: reactivated.subscription_tier,
+				});
+
+				const { password_hash: _, ...memberWithoutPassword } = reactivated;
+				return { accessToken, member: memberWithoutPassword, needs_subscription: true };
+			}
+
+			const hasPaidSubscription =
+				[SubscriptionStatus.ACTIVE, SubscriptionStatus.TRIALING].includes(existingUser.subscription_status) &&
+				existingUser.subscription_tier !== SubscriptionTier.FREE;
+
+			const accessToken = this.createToken({
+				id: existingUser._id,
+				subscription_tier: existingUser.subscription_tier,
+			});
+
+			const { password_hash: _, ...memberWithoutPassword } = existingUser;
+			return { accessToken, member: memberWithoutPassword, needs_subscription: !hasPaidSubscription };
+		}
+
+		const { data: newUser, error } = await this.databaseService.client
+			.from('users')
+			.insert({
+				email,
+				full_name,
+				avatar_url,
+				auth_type: MemberAuthType.GOOGLE,
+				subscription_tier: SubscriptionTier.FREE,
+				credits_limit: FREE_CREDITS_LIMIT,
+			})
+			.select()
+			.single();
+
+		if (error || !newUser) throw new BadRequestException(Message.CREATE_FAILED);
+
+		const accessToken = this.createToken({
+			id: newUser._id,
+			subscription_tier: newUser.subscription_tier,
+		});
+
+		this.emailService.sendWelcome(newUser.email, newUser.full_name ?? '').catch(() => {});
+
+		const { password_hash: _, ...memberWithoutPassword } = newUser;
+		return { accessToken, member: memberWithoutPassword, needs_subscription: true };
+	}
 
 	async signup(input: SignupDto): Promise<AuthResponse> {
 		console.log('AuthService: signup');
@@ -101,6 +204,9 @@ export class AuthService {
 		if (error || !user) throw new BadRequestException(Message.USER_NOT_FOUND);
 		if (user.member_status === MemberStatus.DELETED) throw new BadRequestException(Message.USER_NOT_FOUND);
 		if (user.member_status === MemberStatus.SUSPENDED) throw new BadRequestException(Message.ACCOUNT_SUSPENDED);
+		if (user.auth_type === MemberAuthType.GOOGLE && !user.password_hash) {
+			throw new BadRequestException(Message.USE_GOOGLE_SIGN_IN);
+		}
 
 		const isMatch = await bcrypt.compare(password, user.password_hash);
 		if (!isMatch) throw new BadRequestException(Message.WRONG_PASSWORD);

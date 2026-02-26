@@ -24,6 +24,11 @@ export enum Message {
 	PASSWORD_RESET_SUCCESS = 'Password has been successfully reset.',
 	PASSWORD_RESET_EMAIL_SENT = 'If an account exists, a reset email will be sent.',
 
+	// Google Auth
+	GOOGLE_AUTH_FAILED = 'Google authentication failed!',
+	GOOGLE_EMAIL_NOT_VERIFIED = 'Google email is not verified!',
+	USE_GOOGLE_SIGN_IN = 'This account uses Google Sign-In. Please sign in with Google.',
+
 	// User
 	EMAIL_ALREADY_EXISTS = 'Email already exists!',
 	USER_NOT_FOUND = 'User not found!',

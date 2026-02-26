@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards, Headers } from '@nestjs/common';
 import { MemberService } from './member.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
-import { LoginDto } from '../../libs/dto/member/login.dto';
+import { GoogleLoginDto, LoginDto } from '../../libs/dto/member/login.dto';
 import { AdminSignupDto } from '../../libs/dto/admin/admin-signup.dto';
 import { AdminLoginDto } from '../../libs/dto/admin/admin-login.dto';
 import { AdminGetUsersQueryDto } from '../../libs/dto/admin/admin-get-users-query.dto';
@@ -33,6 +33,11 @@ export class MemberController {
 	@Post('login')
 	async login(@Body() input: LoginDto): Promise<AuthResponse> {
 		return this.memberService.login(input);
+	}
+
+	@Post('google-auth')
+	async googleLogin(@Body() input: GoogleLoginDto): Promise<AuthResponse> {
+		return this.memberService.googleLogin(input);
 	}
 
 	@Post('forgot-password-flow')
