@@ -11,41 +11,44 @@ import { AdminAuthResponse, AdminMember, AdminTokenPayload } from '../../libs/ty
 import { MemberAuthType, MemberStatus, Message, SubscriptionStatus, SubscriptionTier } from '../../libs/enums/common.enum';
 import * as jwt from 'jsonwebtoken';
 import * as bcrypt from 'bcryptjs';
-import { OAuth2Client } from 'google-auth-library';
 
 const FREE_CREDITS_LIMIT = 25;
+const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
+
+interface GoogleUserInfo {
+	email: string;
+	name: string;
+	picture: string;
+	email_verified: boolean;
+}
 
 @Injectable()
 export class AuthService {
-	private readonly googleClient: OAuth2Client;
-
 	constructor(
 		private readonly configService: ConfigService,
 		private readonly databaseService: DatabaseService,
 		private readonly emailService: EmailService,
-	) {
-		this.googleClient = new OAuth2Client(this.configService.get<string>('GOOGLE_CLIENT_ID'));
-	}
+	) {}
 
 	// ── USER AUTH ────────────────────────────────────────────────
 
 	async googleLogin(input: GoogleLoginDto): Promise<AuthResponse> {
 		console.log('AuthService: googleLogin');
 
-		const ticket = await this.googleClient.verifyIdToken({
-			idToken: input.id_token,
-			audience: this.configService.get<string>('GOOGLE_CLIENT_ID'),
+		const res = await fetch(GOOGLE_USERINFO_URL, {
+			headers: { Authorization: `Bearer ${input.access_token}` },
 		}).catch(() => {
 			throw new BadRequestException(Message.GOOGLE_AUTH_FAILED);
 		});
 
-		const payload = ticket.getPayload();
-		if (!payload) throw new BadRequestException(Message.GOOGLE_AUTH_FAILED);
-		if (!payload.email_verified) throw new BadRequestException(Message.GOOGLE_EMAIL_NOT_VERIFIED);
+		if (!res.ok) throw new BadRequestException(Message.GOOGLE_AUTH_FAILED);
 
-		const email = payload.email!;
-		const full_name = payload.name ?? '';
-		const avatar_url = payload.picture ?? '';
+		const userInfo: GoogleUserInfo = await res.json();
+		if (!userInfo.email_verified) throw new BadRequestException(Message.GOOGLE_EMAIL_NOT_VERIFIED);
+
+		const email = userInfo.email;
+		const full_name = userInfo.name ?? '';
+		const avatar_url = userInfo.picture ?? '';
 
 		const { data: existingUser } = await this.databaseService.client
 			.from('users')
@@ -56,6 +59,10 @@ export class AuthService {
 		if (existingUser) {
 			if (existingUser.member_status === MemberStatus.SUSPENDED) {
 				throw new BadRequestException(Message.ACCOUNT_SUSPENDED);
+			}
+
+			if (existingUser.auth_type === MemberAuthType.EMAIL && existingUser.member_status === MemberStatus.ACTIVE) {
+				throw new BadRequestException(Message.USE_EMAIL_SIGN_IN);
 			}
 
 			if (existingUser.member_status === MemberStatus.DELETED) {

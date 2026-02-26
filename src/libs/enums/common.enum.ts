@@ -28,6 +28,7 @@ export enum Message {
 	GOOGLE_AUTH_FAILED = 'Google authentication failed!',
 	GOOGLE_EMAIL_NOT_VERIFIED = 'Google email is not verified!',
 	USE_GOOGLE_SIGN_IN = 'This account uses Google Sign-In. Please sign in with Google.',
+	USE_EMAIL_SIGN_IN = 'This account uses email sign-in. Please sign in with your email and password.',
 
 	// User
 	EMAIL_ALREADY_EXISTS = 'Email already exists!',

@@ -14,5 +14,5 @@ export class LoginDto {
 export class GoogleLoginDto {
 	@IsString()
 	@IsNotEmpty()
-	id_token: string;
+	access_token: string;
 }
