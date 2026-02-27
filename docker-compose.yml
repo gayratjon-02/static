@@ -22,7 +22,7 @@ services:
       # AI Keys
       CLAUDE_API_KEY: ${ANTHROPIC_API_KEY}
       GEMINI_API_KEY: ${GEMINI_API_KEY}
-      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3-pro-image-preview}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-3.1-flash-image-preview}
 
       # Auth
       JWT_SECRET: ${JWT_SECRET}
