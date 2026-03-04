@@ -34,8 +34,11 @@ export class ClaudeService {
 		importantNotes: string,
 	): Promise<Claude6VariationsResponse> {
 		const sanitizedNotes = this.sanitizeImportantNotes(importantNotes);
-		const systemPrompt = await this.get6VariationsSystemPrompt();
-		const userPromptText = this.build6VariationsUserPrompt(brand, product, concept, sanitizedNotes);
+		const [systemPrompt, conceptLayout] = await Promise.all([
+			this.get6VariationsSystemPrompt(),
+			this.getConceptLayoutInstructions(concept.category),
+		]);
+		const userPromptText = this.build6VariationsUserPrompt(brand, product, concept, sanitizedNotes, conceptLayout);
 
 		this.logger.log('Sending 6-variations request to Claude API...');
 
@@ -86,8 +89,11 @@ export class ClaudeService {
 		variationIndex: number = 0,
 	): Promise<ClaudeResponseJson> {
 		const sanitizedNotes = this.sanitizeImportantNotes(importantNotes);
-		const systemPrompt = await this.getSystemPrompt();
-		const userPromptText = this.buildUserPrompt(brand, product, concept, sanitizedNotes, variationIndex);
+		const [systemPrompt, conceptLayout] = await Promise.all([
+			this.getSystemPrompt(),
+			this.getConceptLayoutInstructions(concept.category),
+		]);
+		const userPromptText = this.buildUserPrompt(brand, product, concept, sanitizedNotes, variationIndex, conceptLayout);
 
 		this.logger.log('Sending single ad request to Claude API...');
 
@@ -152,72 +158,7 @@ export class ClaudeService {
 		errorDescription: string,
 		imageUrl?: string,
 	): Promise<ClaudeResponseJson> {
-		const systemPrompt = `You are a visual quality analyst and ad creative director for Static Engine. The user has generated a Facebook ad image but found errors in it. Your job is to:
-
-1. ANALYZE the current ad image (if provided) to identify visual issues
-2. WRITE an improved Gemini image generation prompt that fixes the issues
-3. PRESERVE everything that was correct in the original ad
-
-═══════════════════════════════════════════════════
-ANALYSIS FRAMEWORK
-═══════════════════════════════════════════════════
-
-When analyzing the ad image, check for these common AI generation issues:
-
-TEXT ISSUES:
-- Misspelled words (very common: check every single word)
-- Words cut off or overlapping
-- Text too small to read
-- Text color blending into background (poor contrast)
-- Gibberish characters or garbled text
-- Hex codes appearing as visible text (#2c3e50, #FFFFFF, etc.)
-
-PRODUCT ISSUES:
-- Product distorted, stretched, or wrong proportions
-- Product missing entirely
-- Wrong product shown (generic AI-generated instead of actual)
-- Product photo poorly integrated (floating, no shadow, wrong scale)
-
-LAYOUT ISSUES:
-- Elements overlapping
-- Unbalanced composition
-- Too much empty space or too cluttered
-- Key elements cut off at edges
-
-COLOR ISSUES:
-- Colors don't match brand palette
-- Poor contrast making text unreadable
-- Inconsistent color scheme across the ad
-
-LOGO ISSUES:
-- Logo distorted, too small, or wrong logo
-- Logo placed in wrong position
-- Logo colors incorrect
-
-═══════════════════════════════════════════════════
-OUTPUT FORMAT
-═══════════════════════════════════════════════════
-
-You MUST respond with valid JSON only, no markdown, no code blocks. The JSON must have these exact fields:
-{
-  "headline": "Short headline (max 6 words, simple common words) — corrected and spell-checked",
-  "subheadline": "Supporting text (max 10 words) — corrected",
-  "body_text": "Persuasive body copy (max 25 words)",
-  "callout_texts": ["Max 3 words", "Simple words", "Easy to spell"],
-  "cta_text": "CTA (max 3 words)",
-  "gemini_image_prompt": "IMPROVED prompt with specific fix instructions. Colors by NAME only — NEVER hex codes."
-}
-
-TEXT LENGTH RULES: Keep all text SHORT — shorter text = fewer spelling errors. Headlines max 6 words, callouts max 3 words each, CTA max 3 words. Use simple common English words only.
-
-CRITICAL RULES:
-- NEVER include hex codes in the improved prompt — use color names only
-- NEVER include pixel dimensions (e.g. "48px", "115px", "1080x1080") — use descriptive sizes ("large", "small", "subtle")
-- Keep testimonials SHORT: max 8 words per sentence to prevent word duplication
-- Spell-check every word in corrected copy
-- Reference "provided product photo" and "provided brand logo" — don't describe them
-- Focus the prompt improvements specifically on the identified issues
-- Keep everything that was correct — don't change what's already good`;
+		const systemPrompt = await this.getFixErrorsSystemPrompt();
 
 		const userPromptText = `${imageUrl ? 'Analyze this Facebook ad image for visual quality issues and generate a fixed version.' : 'Fix the following ad creative based on the reported issues.'}
 
@@ -782,6 +723,7 @@ You MUST respond with valid JSON only, no markdown, no code blocks. The JSON mus
 		product: Product,
 		concept: AdConcept,
 		importantNotes: string,
+		conceptLayout?: string,
 	): string {
 		// Detect concept category for specific rules
 		const isSocialProof = concept.category?.toLowerCase().includes('social') || concept.category?.toLowerCase().includes('proof');
@@ -832,8 +774,12 @@ Each variation should differ in: headline wording, testimonial content, card arr
 `;
 		}
 
+		const layoutSection = conceptLayout
+			? `\n=== CONCEPT LAYOUT REQUIREMENTS ===\n${conceptLayout}\n`
+			: '';
+
 		return `Create exactly 6 unique Facebook ad creative variations based on the following:
-${conceptRules}
+${conceptRules}${layoutSection}
 === BRAND ===
 Name: ${brand.name}
 Industry: ${brand.industry}
@@ -912,6 +858,7 @@ Generate EXACTLY 6 unique variations as a JSON object with a "variations" array.
 		concept: AdConcept,
 		importantNotes: string,
 		variationIndex: number = 0,
+		conceptLayout?: string,
 	): string {
 		// Detect Concept Category
 		const isFeatureCallout = concept.category?.toLowerCase().includes('feature') || concept.category?.toLowerCase().includes('callout');
@@ -992,13 +939,17 @@ Follow this layout EXACTLY:
 `;
 		}
 
+		const layoutSection = conceptLayout
+			? `\n=== CONCEPT LAYOUT REQUIREMENTS ===\n${conceptLayout}\n`
+			: '';
+
 		return `Create a Facebook ad creative based on the following:
 
 === VARIATION SETTINGS ===
 Variation Index: ${variationIndex + 1}/6
 Visual Style: ${currentStyle}
 
-${specificInstructions}
+${specificInstructions}${layoutSection}
 
 === BRAND ===
 Name: ${brand.name}
@@ -1255,5 +1206,120 @@ Ensure the layout is robust and does not rely on hardcoded pixel coordinates.`;
 			cta_text: parsed.cta_text,
 			gemini_image_prompt: parsed.gemini_image_prompt,
 		};
+	}
+
+	/**
+	 * Fix-Errors system prompt — loaded from DB (template_type='fix_errors'), with fallback.
+	 */
+	private async getFixErrorsSystemPrompt(): Promise<string> {
+		try {
+			const { data, error } = await this.databaseService.client
+				.from('prompt_templates')
+				.select('content')
+				.eq('template_type', 'fix_errors')
+				.eq('is_active', true)
+				.order('version', { ascending: false })
+				.limit(1)
+				.single();
+
+			if (!error && data?.content) {
+				this.logger.log('Fix-errors system prompt loaded from DB');
+				return data.content;
+			}
+		} catch {
+			this.logger.warn('Failed to load fix-errors prompt from DB, using fallback');
+		}
+
+		return this.getFallbackFixErrorsSystemPrompt();
+	}
+
+	private getFallbackFixErrorsSystemPrompt(): string {
+		return `You are a visual quality analyst and ad creative director for Static Engine. The user has generated a Facebook ad image but found errors in it. Your job is to:
+
+1. ANALYZE the current ad image (if provided) to identify visual issues
+2. WRITE an improved Gemini image generation prompt that fixes the issues
+3. PRESERVE everything that was correct in the original ad
+
+ANALYSIS FRAMEWORK — Check for these common AI generation issues:
+
+TEXT ISSUES:
+- Misspelled words (very common: check every single word)
+- Words cut off or overlapping
+- Text too small to read
+- Text color blending into background (poor contrast)
+- Gibberish characters or garbled text
+- Hex codes appearing as visible text
+
+PRODUCT ISSUES:
+- Product distorted, stretched, or wrong proportions
+- Product missing entirely
+- Wrong product shown (generic AI-generated instead of actual)
+- Product photo poorly integrated (floating, no shadow, wrong scale)
+
+LAYOUT ISSUES:
+- Elements overlapping
+- Unbalanced composition
+- Too much empty space or too cluttered
+- Key elements cut off at edges
+
+COLOR ISSUES:
+- Colors don't match brand palette
+- Poor contrast making text unreadable
+- Inconsistent color scheme across the ad
+
+LOGO ISSUES:
+- Logo distorted, too small, or wrong logo
+- Logo placed in wrong position
+- Logo colors incorrect
+
+OUTPUT FORMAT — Respond with valid JSON only, no markdown, no code blocks:
+{
+  "headline": "Short headline (max 6 words, simple common words) — corrected and spell-checked",
+  "subheadline": "Supporting text (max 10 words) — corrected",
+  "body_text": "Persuasive body copy (max 25 words)",
+  "callout_texts": ["Max 3 words", "Simple words", "Easy to spell"],
+  "cta_text": "CTA (max 3 words)",
+  "gemini_image_prompt": "IMPROVED prompt with specific fix instructions. Colors by NAME only — NEVER hex codes."
+}
+
+TEXT LENGTH RULES: Keep all text SHORT — shorter text = fewer spelling errors. Headlines max 6 words, callouts max 3 words each, CTA max 3 words. Use simple common English words only.
+
+CRITICAL RULES:
+- NEVER include hex codes in the improved prompt — use color names only
+- NEVER include pixel dimensions (e.g. "48px", "115px", "1080x1080") — use descriptive sizes
+- Keep testimonials SHORT: max 8 words per sentence to prevent word duplication
+- Spell-check every word in corrected copy
+- Reference "provided product photo" and "provided brand logo" — don't describe them
+- Focus the prompt improvements specifically on the identified issues
+- Keep everything that was correct — don't change what's already good`;
+	}
+
+	/**
+	 * Loads concept layout instructions from DB by category name.
+	 * Falls back to a generic instruction if not found.
+	 */
+	async getConceptLayoutInstructions(conceptCategory: string): Promise<string> {
+		const normalizedName = `concept_layout_${conceptCategory.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
+
+		try {
+			const { data, error } = await this.databaseService.client
+				.from('prompt_templates')
+				.select('content')
+				.eq('template_type', 'concept_modifier')
+				.eq('name', normalizedName)
+				.eq('is_active', true)
+				.order('version', { ascending: false })
+				.limit(1)
+				.single();
+
+			if (!error && data?.content) {
+				this.logger.log(`Concept layout loaded from DB: ${normalizedName}`);
+				return data.content;
+			}
+		} catch {
+			this.logger.warn(`Concept layout not found in DB: ${normalizedName}`);
+		}
+
+		return 'Use the reference image to understand the layout style. Replicate the general composition, element positioning, and visual hierarchy.';
 	}
 }
