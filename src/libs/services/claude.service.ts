@@ -1298,7 +1298,8 @@ CRITICAL RULES:
 	 * Loads concept layout instructions from DB by category name.
 	 * Falls back to a generic instruction if not found.
 	 */
-	async getConceptLayoutInstructions(conceptCategory: string): Promise<string> {
+	async getConceptLayoutInstructions(conceptCategory: string | null): Promise<string> {
+		if (!conceptCategory) return '';
 		const normalizedName = `concept_layout_${conceptCategory.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`;
 
 		try {
