@@ -109,3 +109,11 @@ export enum SubscriptionStatus {
 	PAST_DUE = 'past_due',
 	TRIALING = 'trialing',
 }
+
+/** Canva order status */
+export enum CanvaOrderStatus {
+	PENDING = 'pending',
+	IN_PROGRESS = 'in_progress',
+	FULFILLED = 'fulfilled',
+	REFUNDED = 'refunded',
+}

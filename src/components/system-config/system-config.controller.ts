@@ -16,6 +16,10 @@ export class SystemConfigController {
 			'credits_per_generation',
 			'credits_per_fix_errors',
 			'credits_per_regenerate_single',
+			'canva_base_price_cents',
+			'canva_bundle_price_cents',
+			'canva_discount_growth',
+			'canva_discount_pro',
 		];
 		const config: Record<string, unknown> = {};
 		for (const entry of all) {

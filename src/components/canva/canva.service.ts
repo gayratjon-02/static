@@ -51,8 +51,38 @@ export class CanvaService {
 		return { _id: order._id };
 	}
 
+	async startOrder(orderId: string, adminUserId: string): Promise<void> {
+		console.log('CanvaService: startOrder');
+
+		const { data: order, error: fetchError } = await this.databaseService.client
+			.from('canva_orders')
+			.select('_id, status')
+			.eq('_id', orderId)
+			.single();
+
+		if (fetchError ?? !order) {
+			throw new NotFoundException(Message.CANVA_ORDER_NOT_FOUND);
+		}
+
+		if (order.status !== 'pending') {
+			throw new BadRequestException(Message.CANVA_ORDER_UPDATE_FAILED);
+		}
+
+		const { error: updateError } = await this.databaseService.client
+			.from('canva_orders')
+			.update({
+				status: 'in_progress',
+				fulfilled_by: adminUserId,
+			})
+			.eq('_id', orderId);
+
+		if (updateError) {
+			throw new BadRequestException(Message.CANVA_ORDER_UPDATE_FAILED);
+		}
+	}
+
 	async fulfillOrder(orderId: string, canvaLink: string, adminUserId: string): Promise<void> {
-		console.log('CanvaService: PATCH /orders/:id/fulfill');
+		console.log('CanvaService: fulfillOrder');
 
 		const { data: order, error: fetchError } = await this.databaseService.client
 			.from('canva_orders')

@@ -58,13 +58,19 @@ export class BillingController {
 	 */
 	@UseGuards(AuthGuard)
 	@Post('create-canva-checkout/:adId')
-	async createCanvaCheckout(@Param('adId') adId: string, @AuthMember() authMember: Member) {
+	async createCanvaCheckout(
+		@Param('adId') adId: string,
+		@Body() body: { ratio_count?: number },
+		@AuthMember() authMember: Member,
+	) {
+		console.log('BillingController: createCanvaCheckout');
 		return this.billingService.createCanvaCheckout(
 			authMember._id,
 			authMember.email,
 			authMember.full_name,
 			adId,
 			authMember.subscription_tier,
+			body.ratio_count ?? 1,
 		);
 	}
 

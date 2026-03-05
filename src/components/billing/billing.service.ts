@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException, InternalServerErrorException }
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from 'src/database/database.service';
 import { EmailService } from '../email/email.service';
+import { SystemConfigService } from '../system-config/system-config.service';
 import Stripe from 'stripe';
 import { CanvaService } from '../canva/canva.service';
 
@@ -15,6 +16,7 @@ export class BillingService {
 		private readonly databaseService: DatabaseService,
 		private readonly emailService: EmailService,
 		private readonly canvaService: CanvaService,
+		private readonly systemConfigService: SystemConfigService,
 	) {
 		this.stripe = new Stripe(this.configService.get<string>('STRIPE_SECRET_KEY'));
 	}
@@ -251,13 +253,20 @@ export class BillingService {
 		fullName: string,
 		adId: string,
 		userTier?: string,
+		ratioCount: number = 1,
 	): Promise<{ checkout_url: string }> {
+		console.log('BillingService: createCanvaCheckout');
+
 		const { stripe_customer_id } = await this.getOrCreateCustomer(userId, email, fullName);
 
-		// Tier-based discounts: Growth 20%, Pro 10%, Starter 0%
-		const basePrice = 490; // $4.90
-		const discountPercent = userTier === 'growth_engine' ? 20 : userTier === 'pro' ? 10 : 0;
-		const finalPrice = discountPercent > 0 ? Math.round(basePrice * (1 - discountPercent / 100)) : basePrice;
+		const basePrice = await this.systemConfigService.getNumber('canva_base_price_cents', 490);
+		const bundlePrice = await this.systemConfigService.getNumber('canva_bundle_price_cents', 990);
+		const growthDiscount = await this.systemConfigService.getNumber('canva_discount_growth', 20);
+		const proDiscount = await this.systemConfigService.getNumber('canva_discount_pro', 10);
+
+		const selectedPrice = ratioCount >= 3 ? bundlePrice : basePrice * ratioCount;
+		const discountPercent = userTier === 'growth_engine' ? growthDiscount : userTier === 'pro' ? proDiscount : 0;
+		const finalPrice = discountPercent > 0 ? Math.round(selectedPrice * (1 - discountPercent / 100)) : selectedPrice;
 
 		if (discountPercent > 0) {
 			this.logger.log(
@@ -276,8 +285,8 @@ export class BillingService {
 						price_data: {
 							currency: 'usd',
 							product_data: {
-								name: 'Editable Canva Template',
-								description: `A fully editable Canva version of your generated ad.${discountPercent > 0 ? ` (${discountPercent}% ${userTier} discount applied)` : ''}`,
+								name: ratioCount >= 3 ? 'Canva Template Bundle (All 3 Ratios)' : 'Editable Canva Template',
+								description: `${ratioCount >= 3 ? 'Editable Canva templates for all 3 ratios (1:1, 9:16, 16:9)' : 'A fully editable Canva version of your generated ad'}.${discountPercent > 0 ? ` (${discountPercent}% ${userTier} discount applied)` : ''}`,
 							},
 							unit_amount: finalPrice,
 						},
@@ -289,9 +298,10 @@ export class BillingService {
 					addon_type: 'canva_template',
 					ad_id: adId,
 					discount_percent: String(discountPercent),
+					ratio_count: String(ratioCount),
 				},
 				payment_intent_data: {
-					metadata: { user_id: userId, addon_type: 'canva_template', ad_id: adId },
+					metadata: { user_id: userId, addon_type: 'canva_template', ad_id: adId, ratio_count: String(ratioCount) },
 				},
 				success_url: `${this.configService.get('FRONTEND_URL')}/generateAds?canva_checkout=success`,
 				cancel_url: `${this.configService.get('FRONTEND_URL')}/generateAds?canva_checkout=cancelled`,

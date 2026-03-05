@@ -42,6 +42,18 @@ export class CanvaController {
 
 	@Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_ADMIN)
 	@UseGuards(RolesGuard)
+	@Patch('orders/:id/start')
+	async startOrder(
+		@Param('id') id: string,
+		@AuthMember() adminMember: AdminMember,
+	) {
+		console.log('CanvaController: PATCH /orders/:id/start');
+		await this.canvaService.startOrder(id, adminMember._id);
+		return { success: true };
+	}
+
+	@Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_ADMIN)
+	@UseGuards(RolesGuard)
 	@Patch('orders/:id/fulfill')
 	async fulfillOrder(
 		@Param('id') id: string,
