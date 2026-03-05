@@ -770,6 +770,40 @@ export class GenerationService {
 		return { ad_name: name.trim() };
 	}
 
+	public async getBulkDownloadAds(ids: string[], authMember: Member): Promise<{ _id: string; ad_name: string; image_url_1x1: string | null; image_url_9x16: string | null; image_url_16x9: string | null }[]> {
+		console.log('GenerationService: getBulkDownloadAds');
+
+		const { data, error } = await this.databaseService.client
+			.from('generated_ads')
+			.select('_id, ad_name, image_url_1x1, image_url_9x16, image_url_16x9')
+			.in('_id', ids)
+			.eq('user_id', authMember._id)
+			.eq('generation_status', GenerationStatus.COMPLETED);
+
+		if (error || !data || data.length === 0) {
+			throw new BadRequestException(Message.GENERATION_NOT_FOUND);
+		}
+
+		return data;
+	}
+
+	public async getBatchDownloadAds(batchId: string, authMember: Member): Promise<{ _id: string; ad_name: string; image_url_1x1: string | null; image_url_9x16: string | null; image_url_16x9: string | null }[]> {
+		console.log('GenerationService: getBatchDownloadAds');
+
+		const { data, error } = await this.databaseService.client
+			.from('generated_ads')
+			.select('_id, ad_name, image_url_1x1, image_url_9x16, image_url_16x9')
+			.eq('batch_id', batchId)
+			.eq('user_id', authMember._id)
+			.eq('generation_status', GenerationStatus.COMPLETED);
+
+		if (error || !data || data.length === 0) {
+			throw new BadRequestException(Message.GENERATION_NOT_FOUND);
+		}
+
+		return data;
+	}
+
 	public async deleteAds(ids: string[], authMember: Member): Promise<{ deleted: number }> {
 		if (!ids || ids.length === 0) throw new BadRequestException('No IDs provided');
 

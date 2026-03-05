@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, Res, UseGuards } from '@nestjs/common';
 import { Response } from 'express';
 import { SkipThrottle, Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import * as archiver from 'archiver';
 import { GenerationService } from './generation.service';
 import { S3Service } from '../s3/s3.service';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -10,6 +11,7 @@ import { RequireCredits } from '../auth/decorators/credits.decorator';
 import { CreateGenerationDto } from '../../libs/dto/generation/create-generation.dto';
 import { GetGenerationsDto } from '../../libs/dto/generation/get-generations.dto';
 import { FixErrorsDto } from '../../libs/dto/generation/fix-errors.dto';
+import { BulkDownloadDto } from '../../libs/dto/generation/bulk-download.dto';
 import { Member } from '../../libs/types/member/member.type';
 import { Generation, GenerationStatusResponse, GenerationResultsResponse, ExportRatiosResponse, GenerationBatchResponse } from '../../libs/types/generation/generation.type';
 
@@ -195,6 +197,87 @@ export class GenerationController {
 		@AuthMember() authMember: Member,
 	): Promise<{ ad_name: string }> {
 		return this.generationService.renameAd(adId, body.name, authMember);
+	}
+
+	@UseGuards(AuthGuard)
+	@Post('bulkDownload')
+	public async bulkDownload(
+		@Body() input: BulkDownloadDto,
+		@AuthMember() authMember: Member,
+		@Res() res: Response,
+	): Promise<void> {
+		console.log('GenerationController: bulkDownload');
+		const ads = await this.generationService.getBulkDownloadAds(input.ids, authMember);
+		return this.streamZipDownload(ads, res);
+	}
+
+	@UseGuards(AuthGuard)
+	@Get('batchDownload/:batchId')
+	public async batchDownload(
+		@Param('batchId') batchId: string,
+		@AuthMember() authMember: Member,
+		@Res() res: Response,
+	): Promise<void> {
+		console.log('GenerationController: batchDownload');
+		const ads = await this.generationService.getBatchDownloadAds(batchId, authMember);
+		return this.streamZipDownload(ads, res);
+	}
+
+	private async streamZipDownload(
+		ads: { _id: string; ad_name: string; image_url_1x1: string | null; image_url_9x16: string | null; image_url_16x9: string | null }[],
+		res: Response,
+	): Promise<void> {
+		const ratios = ['1x1', '9x16', '16x9'] as const;
+		const ratioFields = {
+			'1x1': 'image_url_1x1',
+			'9x16': 'image_url_9x16',
+			'16x9': 'image_url_16x9',
+		} as const;
+
+		res.set({
+			'Content-Type': 'application/zip',
+			'Content-Disposition': `attachment; filename="ads_${Date.now()}.zip"`,
+			'Cache-Control': 'no-cache',
+		});
+
+		const archive = archiver('zip', { zlib: { level: 5 } });
+		archive.pipe(res);
+
+		archive.on('error', () => {
+			res.status(500).end();
+		});
+
+		for (const ad of ads) {
+			const safeName = (ad.ad_name || ad._id).replace(/[^a-zA-Z0-9_-]/g, '_');
+
+			for (const ratio of ratios) {
+				const imageUrl = ad[ratioFields[ratio]];
+				if (!imageUrl) continue;
+
+				const key = this.s3Service.extractKeyFromUrl(imageUrl);
+				if (!key) continue;
+
+				try {
+					const { body } = await this.s3Service.getObject(key);
+					const chunks: Buffer[] = [];
+					const stream = body.transformToWebStream();
+					const reader = stream.getReader();
+
+					let done = false;
+					while (!done) {
+						const result = await reader.read();
+						done = result.done;
+						if (result.value) chunks.push(Buffer.from(result.value));
+					}
+
+					archive.append(Buffer.concat(chunks), { name: `${safeName}/${safeName}_${ratio}.png` });
+				} catch {
+					// Skip failed images
+				}
+			}
+		}
+
+		await archive.finalize();
 	}
 
 	@UseGuards(AuthGuard)
