@@ -45,6 +45,38 @@ export interface TokenPayload {
 	subscription_tier: SubscriptionTier;
 }
 
+/** Credit warning levels */
+export enum CreditWarningLevel {
+	NONE = 'none',
+	LOW = 'low',
+	CRITICAL = 'critical',
+	DEPLETED = 'depleted',
+}
+
+/** GET /member/getUsage response */
+export interface UsageResponse {
+	subscription_tier: SubscriptionTier;
+	subscription_status: SubscriptionStatus;
+	credits_used: number;
+	credits_limit: number;
+	addon_credits_remaining: number;
+	billing_cycle_start: Date | null;
+	billing_cycle_end: Date | null;
+
+	credit_warning: {
+		level: CreditWarningLevel;
+		credits_remaining: number;
+		credits_total: number;
+		usage_percent: number;
+		message: string | null;
+	};
+
+	stats: {
+		ads_generated: number;
+		ads_saved: number;
+	};
+}
+
 /** Login/Signup response */
 export interface AuthResponse {
 	accessToken: string;

@@ -5,7 +5,7 @@ import { GoogleLoginDto, LoginDto } from '../../libs/dto/member/login.dto';
 import { AdminSignupDto } from '../../libs/dto/admin/admin-signup.dto';
 import { AdminLoginDto } from '../../libs/dto/admin/admin-login.dto';
 import { AdminGetUsersQueryDto } from '../../libs/dto/admin/admin-get-users-query.dto';
-import { AuthResponse, Member, MemberResponse } from '../../libs/types/member/member.type';
+import { AuthResponse, Member, MemberResponse, UsageResponse } from '../../libs/types/member/member.type';
 import { AdminAuthResponse } from '../../libs/types/admin/admin.type';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -91,7 +91,7 @@ export class MemberController {
 
 	@UseGuards(AuthGuard)
 	@Get('getUsage')
-	async getUsage(@AuthMember() authMember: Member) {
+	async getUsage(@AuthMember() authMember: Member): Promise<UsageResponse> {
 		return this.memberService.getUsage(authMember);
 	}
 

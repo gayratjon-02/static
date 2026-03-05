@@ -9,7 +9,7 @@ import { AdminSignupDto } from '../../libs/dto/admin/admin-signup.dto';
 import { AdminLoginDto } from '../../libs/dto/admin/admin-login.dto';
 import { AdminGetUsersQueryDto } from '../../libs/dto/admin/admin-get-users-query.dto';
 import { ForgetPasswordDto, UpdateMemberDto } from '../../libs/dto/member/update-member.dto';
-import { AuthResponse, Member, MemberResponse } from '../../libs/types/member/member.type';
+import { AuthResponse, CreditWarningLevel, Member, MemberResponse, UsageResponse } from '../../libs/types/member/member.type';
 import { AdminAuthResponse } from '../../libs/types/admin/admin.type';
 import { AdminRole, MemberStatus, Message, SubscriptionTier } from '../../libs/enums/common.enum';
 import * as bcrypt from 'bcrypt';
@@ -224,7 +224,7 @@ export class MemberService {
 		return memberWithoutPassword as MemberResponse;
 	}
 
-	async getUsage(authMember: Member) {
+	async getUsage(authMember: Member): Promise<UsageResponse> {
 		console.log('MemberService: getUsage');
 		const [userRes, generatedRes, savedRes] = await Promise.all([
 			this.databaseService.client
@@ -250,12 +250,51 @@ export class MemberService {
 			throw new InternalServerErrorException(Message.NO_DATA_FOUND);
 		}
 
+		const { credits_used, credits_limit, addon_credits_remaining } = userRes.data;
+		const creditsTotal = credits_limit + addon_credits_remaining;
+		const creditsRemaining = Math.max(0, creditsTotal - credits_used);
+		const usagePercent = creditsTotal > 0 ? Math.round((credits_used / creditsTotal) * 100) : 0;
+
+		const creditWarning = this.buildCreditWarning(creditsRemaining, creditsTotal, usagePercent);
+
 		return {
 			...userRes.data,
+			credit_warning: creditWarning,
 			stats: {
 				ads_generated: generatedRes.count ?? 0,
 				ads_saved: savedRes.count ?? 0,
 			},
+		};
+	}
+
+	private buildCreditWarning(
+		creditsRemaining: number,
+		creditsTotal: number,
+		usagePercent: number,
+	): UsageResponse['credit_warning'] {
+		let level: CreditWarningLevel;
+		let message: string | null;
+
+		if (creditsRemaining <= 0) {
+			level = CreditWarningLevel.DEPLETED;
+			message = Message.CREDITS_DEPLETED;
+		} else if (usagePercent >= 95) {
+			level = CreditWarningLevel.CRITICAL;
+			message = Message.CREDITS_CRITICAL;
+		} else if (usagePercent >= 80) {
+			level = CreditWarningLevel.LOW;
+			message = Message.CREDITS_LOW;
+		} else {
+			level = CreditWarningLevel.NONE;
+			message = null;
+		}
+
+		return {
+			level,
+			credits_remaining: creditsRemaining,
+			credits_total: creditsTotal,
+			usage_percent: usagePercent,
+			message,
 		};
 	}
 

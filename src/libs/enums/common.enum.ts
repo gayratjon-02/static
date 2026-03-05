@@ -46,6 +46,9 @@ export enum Message {
 
 	// Credits
 	INSUFFICIENT_CREDITS = 'Insufficient credits for this action!',
+	CREDITS_LOW = 'You have used 80% of your credits. Consider upgrading or purchasing add-on credits.',
+	CREDITS_CRITICAL = 'Almost out of credits! Only a few generations left.',
+	CREDITS_DEPLETED = 'No credits remaining. Upgrade your plan or purchase add-on credits to continue.',
 
 	// Brand / Product
 	BRAND_LIMIT_REACHED = 'You have reached the maximum number of brands for your tier!',
