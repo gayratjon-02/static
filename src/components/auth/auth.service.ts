@@ -33,6 +33,22 @@ export class AuthService {
 
 	// ── USER AUTH ────────────────────────────────────────────────
 
+	/** Check if a user needs to accept the latest ToS */
+	private async checkNeedsTosUpdate(userId: string): Promise<boolean> {
+		const currentTosVersion = process.env.NEXT_PUBLIC_TOS_VERSION || '2026-03-05';
+		const { data: tosAcceptances } = await this.databaseService.client
+			.from('tos_acceptances')
+			.select('tos_version')
+			.eq('user_id', userId)
+			.order('accepted_at', { ascending: false })
+			.limit(1);
+
+		if (tosAcceptances && tosAcceptances.length > 0 && tosAcceptances[0].tos_version === currentTosVersion) {
+			return false;
+		}
+		return true;
+	}
+
 	async googleLogin(input: GoogleLoginDto, ipAddress: string, userAgent: string): Promise<AuthResponse> {
 		console.log('AuthService: googleLogin');
 
@@ -93,7 +109,8 @@ export class AuthService {
 				});
 
 				const { password_hash: _, ...memberWithoutPassword } = reactivated;
-				return { accessToken, member: memberWithoutPassword, needs_subscription: true };
+				const needs_tos_update = await this.checkNeedsTosUpdate(reactivated._id);
+				return { accessToken, member: { ...memberWithoutPassword, needs_tos_update }, needs_subscription: true };
 			}
 
 			const hasPaidSubscription =
@@ -106,7 +123,8 @@ export class AuthService {
 			});
 
 			const { password_hash: _, ...memberWithoutPassword } = existingUser;
-			return { accessToken, member: memberWithoutPassword, needs_subscription: !hasPaidSubscription };
+			const needs_tos_update = await this.checkNeedsTosUpdate(existingUser._id);
+			return { accessToken, member: { ...memberWithoutPassword, needs_tos_update }, needs_subscription: !hasPaidSubscription };
 		}
 
 		const { data: newUser, error } = await this.databaseService.client
@@ -145,7 +163,8 @@ export class AuthService {
 		});
 
 		const { password_hash: _, ...memberWithoutPassword } = newUser;
-		return { accessToken, member: memberWithoutPassword, needs_subscription: true };
+		const needs_tos_update = !(input.tos_accepted && input.tos_version);
+		return { accessToken, member: { ...memberWithoutPassword, needs_tos_update }, needs_subscription: true };
 	}
 
 	async signup(input: SignupDto, ipAddress: string, userAgent: string): Promise<AuthResponse> {
@@ -256,9 +275,11 @@ export class AuthService {
 
 		const { password_hash: _, ...memberWithoutPassword } = user;
 
+		const needs_tos_update = await this.checkNeedsTosUpdate(user._id);
+
 		return {
 			accessToken,
-			member: memberWithoutPassword,
+			member: { ...memberWithoutPassword, needs_tos_update },
 			needs_subscription: !hasPaidSubscription,
 		};
 	}

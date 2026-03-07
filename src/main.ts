@@ -34,6 +34,7 @@ async function bootstrap() {
 			frameguard: { action: 'deny' },
 			noSniff: true,
 			xssFilter: true,
+			crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
 		}),
 	);
 
