@@ -1,4 +1,5 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards, Headers } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards, Headers, Req } from '@nestjs/common';
+import { Request } from 'express';
 import { MemberService } from './member.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
 import { GoogleLoginDto, LoginDto } from '../../libs/dto/member/login.dto';
@@ -11,6 +12,7 @@ import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
 import { Roles } from '../auth/decorators/roles.decorator';
+import { AcceptTosDto } from '../../libs/dto/member/accept-tos.dto';
 import {
 	ForgetPasswordDto,
 	RequestPasswordResetDto,
@@ -21,13 +23,15 @@ import { AdminRole } from '../../libs/enums/common.enum';
 
 @Controller('member')
 export class MemberController {
-	constructor(private readonly memberService: MemberService) {}
+	constructor(private readonly memberService: MemberService) { }
 
 	// ── PUBLIC ───────────────────────────────────────────────────
 
 	@Post('signup')
-	async signup(@Body() input: SignupDto): Promise<AuthResponse> {
-		return this.memberService.signup(input);
+	async signup(@Body() input: SignupDto, @Req() req: Request): Promise<AuthResponse> {
+		const ipAddress = (req.ip || req.connection.remoteAddress) as string | undefined;
+		const userAgent = req.headers['user-agent'] as string | undefined;
+		return this.memberService.signup(input, ipAddress, userAgent);
 	}
 
 	@Post('login')
@@ -64,6 +68,14 @@ export class MemberController {
 	}
 
 	// ── AUTHENTICATED USER ───────────────────────────────────────
+
+	@UseGuards(AuthGuard)
+	@Post('accept-tos')
+	async acceptTos(@AuthMember() authMember: Member, @Body() input: AcceptTosDto, @Req() req: Request): Promise<{ success: boolean }> {
+		const ipAddress = (req.ip || req.connection.remoteAddress) as string | undefined;
+		const userAgent = req.headers['user-agent'] as string | undefined;
+		return this.memberService.acceptTos(authMember, input, ipAddress, userAgent);
+	}
 
 	@UseGuards(AuthGuard)
 	@Post('forgetPassword')

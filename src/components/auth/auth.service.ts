@@ -1,8 +1,9 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../../database/database.service';
 import { EmailService } from '../email/email.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
+import { AcceptTosDto } from '../../libs/dto/member/accept-tos.dto';
 import { GoogleLoginDto, LoginDto } from '../../libs/dto/member/login.dto';
 import { AdminSignupDto } from '../../libs/dto/admin/admin-signup.dto';
 import { AdminLoginDto } from '../../libs/dto/admin/admin-login.dto';
@@ -184,6 +185,28 @@ export class AuthService {
 		};
 	}
 
+	async acceptTos(memberId: string, input: AcceptTosDto, ipAddress?: string, userAgent?: string): Promise<boolean> {
+		if (!input.tos_accepted) {
+			throw new BadRequestException('You must agree to the Terms of Service and Privacy Policy.');
+		}
+
+		const { error } = await this.databaseService.client
+			.from('tos_acceptances')
+			.insert({
+				user_id: memberId,
+				tos_version: input.tos_version,
+				ip_address: ipAddress || null,
+				user_agent: userAgent || null
+			});
+
+		if (error) {
+			console.error("ToS acceptance save error:", error);
+			throw new InternalServerErrorException('Failed to accept Terms of Service.');
+		}
+
+		return true;
+	}
+
 	async login(input: LoginDto): Promise<AuthResponse> {
 		console.log('AuthService: login');
 		const { email, password } = input;
@@ -296,13 +319,33 @@ export class AuthService {
 
 			const { data, error } = await this.databaseService.client
 				.from('users')
-				.select('*')
+				.select(`
+					*,
+					tos_acceptances (
+						tos_version
+					)
+				`)
 				.eq('_id', decoded.id)
+				.order('accepted_at', { foreignTable: 'tos_acceptances', ascending: false })
+				.limit(1, { foreignTable: 'tos_acceptances' })
 				.single();
 
 			if (error || !data) throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
 
-			return data as Member;
+			const currentTosVersion = process.env.NEXT_PUBLIC_TOS_VERSION || '2026-03-05';
+			let needs_tos_update = true;
+
+			if (data.tos_acceptances && data.tos_acceptances.length > 0) {
+				const userLatestVersion = data.tos_acceptances[0].tos_version;
+				if (userLatestVersion === currentTosVersion) {
+					needs_tos_update = false;
+				}
+			}
+
+			// Clean up the relation from the returned object
+			const { tos_acceptances, ...memberData } = data;
+
+			return { ...memberData, needs_tos_update } as Member & { needs_tos_update: boolean };
 		} catch (err) {
 			if (err instanceof UnauthorizedException) throw err;
 			throw new UnauthorizedException(Message.INVALID_TOKEN);

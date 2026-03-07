@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { AuthService } from '../auth/auth.service';
 import { DatabaseService } from '../../database/database.service';
 import { EmailService } from '../email/email.service';
+import { AcceptTosDto } from '../../libs/dto/member/accept-tos.dto';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
 import { GoogleLoginDto, LoginDto } from '../../libs/dto/member/login.dto';
 import { AdminSignupDto } from '../../libs/dto/admin/admin-signup.dto';
@@ -27,13 +28,13 @@ export class MemberService {
 		private readonly databaseService: DatabaseService,
 		private readonly emailService: EmailService,
 		private readonly configService: ConfigService,
-	) {}
+	) { }
 
 	// ── AUTH DELEGATION ──────────────────────────────────────────
 
-	async signup(input: SignupDto): Promise<AuthResponse> {
+	async signup(input: SignupDto, ipAddress?: string, userAgent?: string): Promise<AuthResponse> {
 		console.log('MemberService: signup');
-		return this.authService.signup(input);
+		return this.authService.signup(input, ipAddress, userAgent);
 	}
 
 	async login(input: LoginDto): Promise<AuthResponse> {
@@ -94,7 +95,7 @@ export class MemberService {
 		const token = jwt.sign({ id: user._id, purpose: 'reset_password' }, secret!, { expiresIn: '1h' });
 		const resetLink = `${this.configService.get<string>('FRONTEND_URL')}/reset-password?token=${token}`;
 
-		this.emailService.sendPasswordReset(email, resetLink, user.full_name).catch(() => {});
+		this.emailService.sendPasswordReset(email, resetLink, user.full_name).catch(() => { });
 
 		return SAFE_RESPONSE;
 	}
@@ -128,6 +129,12 @@ export class MemberService {
 	}
 
 	// ── AUTHENTICATED USER ───────────────────────────────────────
+
+	async acceptTos(authMember: Member, input: AcceptTosDto, ipAddress?: string, userAgent?: string): Promise<{ success: boolean }> {
+		console.log('MemberService: acceptTos');
+		await this.authService.acceptTos(authMember._id, input, ipAddress, userAgent);
+		return { success: true };
+	}
 
 	async forgetPassword(authMember: Member, input: ForgetPasswordDto): Promise<MemberResponse> {
 		console.log('MemberService: forgetPassword');

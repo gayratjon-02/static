@@ -27,7 +27,7 @@ export class AuthGuard implements CanActivate {
 		}
 
 		// Oddiy user token sifatida tekshiramiz
-		const authMember = await this.authService.verifyToken(token);
+		const authMember = await this.authService.verifyToken(token) as any;
 		if (!authMember) throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
 
 		if (authMember.member_status === MemberStatus.SUSPENDED) {
@@ -35,6 +35,12 @@ export class AuthGuard implements CanActivate {
 		}
 		if (authMember.member_status === MemberStatus.DELETED) {
 			throw new UnauthorizedException(Message.ACCOUNT_DELETED);
+		}
+
+		// Deny request if ToS is out of date and this is not the ToS acceptance endpoint
+		const path = request.route?.path || request.path || '';
+		if (authMember.needs_tos_update && !path.includes('/member/accept-tos')) {
+			throw new UnauthorizedException('You must accept the updated Terms of Service to continue.');
 		}
 
 		request.authMember = authMember;
