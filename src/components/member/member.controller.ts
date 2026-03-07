@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, Post, Query, UseGuards, Headers, Req } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards, Headers, Req, Delete } from '@nestjs/common';
 import { Request } from 'express';
 import { MemberService } from './member.service';
 import { SignupDto } from '../../libs/dto/member/signup.dto';
 import { GoogleLoginDto, LoginDto } from '../../libs/dto/member/login.dto';
 import { AdminSignupDto } from '../../libs/dto/admin/admin-signup.dto';
 import { AdminLoginDto } from '../../libs/dto/admin/admin-login.dto';
+import { GenerateInviteDto } from '../../libs/dto/admin/generate-invite.dto';
 import { AdminGetUsersQueryDto } from '../../libs/dto/admin/admin-get-users-query.dto';
 import { AuthResponse, Member, MemberResponse, UsageResponse } from '../../libs/types/member/member.type';
 import { AdminAuthResponse } from '../../libs/types/admin/admin.type';
@@ -67,6 +68,18 @@ export class MemberController {
 	@Post('adminLogin')
 	async adminLogin(@Body() input: AdminLoginDto): Promise<AdminAuthResponse> {
 		return this.memberService.adminLogin(input);
+	}
+
+	@UseGuards(RolesGuard)
+	@Roles(AdminRole.SUPER_ADMIN)
+	@Post('generateAdminInvite')
+	async generateAdminInvite(
+		@Body() input: GenerateInviteDto,
+		@Req() req: Request
+	): Promise<{ inviteToken: string, expiresAt: string }> {
+		// Uses the ID of the Super Admin generating the invite
+		const adminId = (req as any).adminUser._id;
+		return this.memberService.generateAdminInvite(input.role, adminId);
 	}
 
 	// ── AUTHENTICATED USER ───────────────────────────────────────
@@ -136,6 +149,13 @@ export class MemberController {
 	@Post('adminUnblock/:id')
 	async adminUnblockUser(@Param('id') id: string) {
 		return this.memberService.adminUnblockUser(id);
+	}
+
+	@Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_ADMIN)
+	@UseGuards(RolesGuard)
+	@Delete('adminDelete/:id')
+	async adminDeleteUser(@Param('id') id: string) {
+		return this.memberService.adminDeleteUser(id);
 	}
 
 	@Roles(AdminRole.SUPER_ADMIN)

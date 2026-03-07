@@ -54,25 +54,90 @@ export class MemberService {
 
 	async adminSignupWithCheck(input: AdminSignupDto, authHeader: string): Promise<AdminAuthResponse> {
 		console.log('MemberService: adminSignup');
-		const { count } = await this.databaseService.client
+		const { count: adminCount } = await this.databaseService.client
 			.from('admin_users')
 			.select('*', { count: 'exact', head: true });
 
-		if (!count) {
+		// 1. If no admins exist, allow exactly ONE Super Admin to be created without a token.
+		if (!adminCount) {
+			if (input.role !== AdminRole.SUPER_ADMIN) {
+				throw new BadRequestException('The first admin must be a SUPER_ADMIN.');
+			}
 			return this.authService.adminSignup(input);
 		}
 
-		const token = authHeader?.split(' ')[1];
-		if (!token || token === 'null' || token === 'undefined') {
-			throw new UnauthorizedException(Message.TOKEN_NOT_EXIST);
+		// 2. If admins exist, we ONLY allow signup via a valid inviteToken.
+		if (!input.inviteToken) {
+			throw new UnauthorizedException('An invite token is required to register as an admin.');
 		}
 
-		const admin = await this.authService.verifyAdminToken(token);
-		if (admin?.admin_role !== AdminRole.SUPER_ADMIN) {
-			throw new UnauthorizedException(Message.NOT_ALLOWED_REQUEST);
+		// 3. Prevent creating more than one SUPER_ADMIN (Optional but requested: "SUPER ADMIN bir dona bolsin")
+		if (input.role === AdminRole.SUPER_ADMIN) {
+			throw new BadRequestException('Only one SUPER_ADMIN is allowed in the system.');
 		}
 
-		return this.authService.adminSignup(input);
+		// 4. Validate the invite token
+		const { data: invite, error } = await this.databaseService.client
+			.from('admin_invites')
+			.select('*')
+			.eq('token', input.inviteToken)
+			.eq('is_used', false)
+			.single();
+
+		if (error || !invite) {
+			throw new BadRequestException('Invalid or expired invite token.');
+		}
+
+		if (new Date(invite.expires_at) < new Date()) {
+			throw new BadRequestException('This invite token has expired.');
+		}
+
+		if (invite.role !== input.role) {
+			throw new BadRequestException(`This token is for a ${invite.role} role, not ${input.role}.`);
+		}
+
+		// 5. Proceed with registration
+		const response = await this.authService.adminSignup(input);
+
+		// 6. Mark token as used
+		await this.databaseService.client
+			.from('admin_invites')
+			.update({ is_used: true })
+			.eq('_id', invite._id);
+
+		return response;
+	}
+
+	// ── ADMIN INVITES ──────────────────────────────────────────
+
+	async generateAdminInvite(role: AdminRole, createdBy: string): Promise<{ inviteToken: string, expiresAt: string }> {
+		if (role === AdminRole.SUPER_ADMIN) {
+			throw new BadRequestException('Cannot invite another SUPER_ADMIN. Only one is allowed.');
+		}
+
+		// Generate a simple 16-character token
+		const crypto = require('crypto');
+		const inviteToken = crypto.randomBytes(8).toString('hex');
+
+		// Expires in 24 hours
+		const expiresAt = new Date();
+		expiresAt.setHours(expiresAt.getHours() + 24);
+
+		const { error } = await this.databaseService.client
+			.from('admin_invites')
+			.insert({
+				token: inviteToken,
+				role: role,
+				created_by: createdBy,
+				expires_at: expiresAt.toISOString(),
+			});
+
+		if (error) {
+			console.error('Failed to create admin invite:', error);
+			throw new InternalServerErrorException('Could not generate invite token');
+		}
+
+		return { inviteToken, expiresAt: expiresAt.toISOString() };
 	}
 
 	// ── PASSWORD RESET (PUBLIC) ──────────────────────────────────
@@ -412,6 +477,21 @@ export class MemberService {
 		if (error || !data) throw new BadRequestException(Message.USER_NOT_FOUND);
 		return data;
 	}
+
+	async adminDeleteUser(targetId: string) {
+		console.log('MemberService: adminDeleteUser');
+		// Hard delete from custom users table.
+		// NOTE: Supabase auth.users should technically be deleted via admin API,
+		// but since we rely on our custom table primarily, deleting here is minimum required.
+		const { error } = await this.databaseService.client
+			.from('users')
+			.delete()
+			.eq('_id', targetId);
+
+		if (error) throw new InternalServerErrorException(Message.SOMETHING_WENT_WRONG);
+		return { success: true, message: 'User deleted successfully' };
+	}
+
 
 	async adminGetPlatformStats() {
 		console.log('MemberService: adminStats');

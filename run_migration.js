@@ -1,48 +1,16 @@
-
-const { Client } = require('pg');
+const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
-const path = require('path');
 
-// Manually parse .env for DATABASE_URL if dotenv is missing
-const envPath = path.resolve(__dirname, '.env');
-if (fs.existsSync(envPath)) {
-    const envConfig = fs.readFileSync(envPath, 'utf8');
-    envConfig.split('\n').forEach(line => {
-        const match = line.match(/^DATABASE_URL=(.*)$/);
-        if (match) {
-            process.env.DATABASE_URL = match[1].replace(/^["'](.*)["']$/, '$1');
-        }
-    });
-}
+const supabaseUrl = 'https://bkjfitcdsioxmfymsmuf.supabase.co';
+const supabaseKey = 'sb_secret_21VBoG8vyCYAqGIIVLC24Q_VRhdVI_F';
 
-const connectionString = process.env.DATABASE_URL;
-
-if (!connectionString) {
-    console.error("DATABASE_URL is not defined in .env");
-    process.exit(1);
-}
-
-const client = new Client({
-    connectionString: connectionString,
-});
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 async function runMigration() {
-    try {
-        await client.connect();
-        console.log("Connected to database");
+    const sql = fs.readFileSync('/Users/gayratjon/Desktop/static-engine/static-engine/supabase/migrations/20260307171522_create_admin_invites.sql', 'utf8');
 
-        const sqlPath = path.resolve(__dirname, 'src/schemas/migrations/001_add_batch_id.sql');
-        const sql = fs.readFileSync(sqlPath, 'utf8');
-
-        console.log("Running migration...");
-        await client.query(sql);
-        console.log("Migration completed successfully!");
-
-    } catch (err) {
-        console.error("Migration failed:", err);
-    } finally {
-        await client.end();
-    }
+    // Notice: The Supabase Data API does not allow arbitrary SQL execution like a direct postgres connection. 
+    // Normally you'd use DDL statements through a postgres module (like `pg`) directly using Postgres connection string.
 }
 
 runMigration();
