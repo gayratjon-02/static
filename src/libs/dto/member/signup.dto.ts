@@ -25,4 +25,11 @@ export class SignupDto {
 	@IsEnum(SubscriptionTier)
 	@IsOptional()
 	subscription_tier?: SubscriptionTier;
+
+	@IsNotEmpty()
+	tos_accepted: boolean;
+
+	@IsString()
+	@IsNotEmpty()
+	tos_version: string;
 }

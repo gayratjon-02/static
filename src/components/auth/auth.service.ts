@@ -28,7 +28,7 @@ export class AuthService {
 		private readonly configService: ConfigService,
 		private readonly databaseService: DatabaseService,
 		private readonly emailService: EmailService,
-	) {}
+	) { }
 
 	// ── USER AUTH ────────────────────────────────────────────────
 
@@ -128,15 +128,19 @@ export class AuthService {
 			subscription_tier: newUser.subscription_tier,
 		});
 
-		this.emailService.sendWelcome(newUser.email, newUser.full_name ?? '').catch(() => {});
+		this.emailService.sendWelcome(newUser.email, newUser.full_name ?? '').catch(() => { });
 
 		const { password_hash: _, ...memberWithoutPassword } = newUser;
 		return { accessToken, member: memberWithoutPassword, needs_subscription: true };
 	}
 
-	async signup(input: SignupDto): Promise<AuthResponse> {
+	async signup(input: SignupDto, ipAddress: string, userAgent: string): Promise<AuthResponse> {
 		console.log('AuthService: signup');
-		const { email, password, full_name, avatar_url } = input;
+		const { email, password, full_name, avatar_url, tos_accepted, tos_version } = input;
+
+		if (!tos_accepted) {
+			throw new BadRequestException('You must agree to the Terms of Service and Privacy Policy to continue.');
+		}
 
 		const { data: existingUser } = await this.databaseService.client
 			.from('users')
@@ -150,35 +154,17 @@ export class AuthService {
 
 		const password_hash = await this.hashPassword(password);
 
-		const { data: newUser, error } = existingUser
-			? await this.databaseService.client
-					.from('users')
-					.update({
-						full_name,
-						password_hash,
-						avatar_url: avatar_url ?? '',
-						member_status: MemberStatus.ACTIVE,
-						subscription_tier: SubscriptionTier.FREE,
-						credits_used: 0,
-						credits_limit: FREE_CREDITS_LIMIT,
-						addon_credits_remaining: 0,
-						updated_at: new Date(),
-					})
-					.eq('_id', existingUser._id)
-					.select()
-					.single()
-			: await this.databaseService.client
-					.from('users')
-					.insert({
-						email,
-						full_name,
-						password_hash,
-						avatar_url: avatar_url ?? '',
-						subscription_tier: SubscriptionTier.FREE,
-						credits_limit: FREE_CREDITS_LIMIT,
-					})
-					.select()
-					.single();
+		// Start Transaction
+		const { data: newUser, error } = await this.databaseService.client.rpc('signup_with_tos', {
+			p_email: email,
+			p_full_name: full_name,
+			p_password_hash: password_hash,
+			p_avatar_url: avatar_url ?? '',
+			p_tos_version: tos_version,
+			p_ip_address: ipAddress,
+			p_user_agent: userAgent,
+			p_existing_user_id: existingUser ? existingUser._id : null
+		});
 
 		if (error || !newUser) throw new BadRequestException(Message.CREATE_FAILED);
 
@@ -187,7 +173,7 @@ export class AuthService {
 			subscription_tier: newUser.subscription_tier,
 		});
 
-		this.emailService.sendWelcome(newUser.email, newUser.full_name ?? '').catch(() => {});
+		this.emailService.sendWelcome(newUser.email, newUser.full_name ?? '').catch(() => { });
 
 		const { password_hash: _, ...memberWithoutPassword } = newUser;
 
