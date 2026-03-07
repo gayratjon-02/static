@@ -156,7 +156,7 @@ export class AuthService {
 		const password_hash = await this.hashPassword(password);
 
 		// Start Transaction
-		const { data: newUser, error } = await this.databaseService.client.rpc('signup_with_tos', {
+		const { data: rpcResult, error } = await this.databaseService.client.rpc('signup_with_tos', {
 			p_email: email,
 			p_full_name: full_name,
 			p_password_hash: password_hash,
@@ -167,7 +167,14 @@ export class AuthService {
 			p_existing_user_id: existingUser ? existingUser._id : null
 		});
 
-		if (error || !newUser) throw new BadRequestException(Message.CREATE_FAILED);
+		if (error) {
+			console.error('signup_with_tos RPC error:', error);
+			throw new BadRequestException(Message.CREATE_FAILED);
+		}
+
+		// RETURNS SETOF users → rpcResult is an array
+		const newUser = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+		if (!newUser) throw new BadRequestException(Message.CREATE_FAILED);
 
 		const accessToken = this.createToken({
 			id: newUser._id,
