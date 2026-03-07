@@ -181,7 +181,14 @@ export class AuthService {
 			subscription_tier: newUser.subscription_tier,
 		});
 
-		this.emailService.sendWelcome(newUser.email, newUser.full_name ?? '').catch(() => { });
+		const tierInfo: Record<string, { name: string; credits: string }> = {
+			starter: { name: 'Starter', credits: '250' },
+			pro: { name: 'Pro', credits: '750' },
+			growth: { name: 'Growth Engine', credits: '2,000' },
+			free: { name: 'Free', credits: '25' },
+		};
+		const plan = tierInfo[input.subscription_tier || 'free'] || tierInfo.free;
+		this.emailService.sendWelcome(newUser.email, newUser.full_name ?? '', plan.name, plan.credits).catch(() => { });
 
 		const { password_hash: _, ...memberWithoutPassword } = newUser;
 

@@ -39,14 +39,66 @@ export class EmailService {
     }
 
     /** Welcome email — sent on signup */
-    async sendWelcome(to: string, fullName: string): Promise<void> {
-        const subject = "Welcome — Static Engine";
+    async sendWelcome(to: string, fullName: string, planName?: string, planCredits?: string): Promise<void> {
+        const subject = "🎉 Welcome to Static Engine — Let's Build Your Ads!";
+        const displayPlan = planName || 'Free';
+        const displayCredits = planCredits || '25';
         const html = `
-            <h2>Hello, ${fullName}!</h2>
-            <p>You have successfully signed up.</p>
-            <p>Choose a subscription plan to start using ad generation.</p>
-            <p>If you have any questions, just reply to this email.</p>
-            <p>— The Static Engine team</p>
+            <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; background-color: #0f172a; color: #f8fafc; border-radius: 16px; overflow: hidden;">
+                <div style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); padding: 40px 32px 24px; text-align: center;">
+                    <h1 style="margin: 0 0 8px; font-size: 28px; font-weight: 800; color: #3ECFCF;">⚡ Static Engine</h1>
+                    <p style="margin: 0; color: #94a3b8; font-size: 14px;">AI Ad Generator</p>
+                </div>
+
+                <div style="padding: 32px;">
+                    <h2 style="margin: 0 0 16px; font-size: 22px; color: #f8fafc;">Welcome aboard, ${fullName}! 🎉</h2>
+                    <p style="color: #cbd5e1; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
+                        Thank you for joining Static Engine — the AI-powered platform that helps you create 
+                        high-converting Facebook ad creatives, landing pages, and marketing materials in seconds. 
+                        Upload your brand, pick a concept, and let AI do the rest.
+                    </p>
+
+                    <div style="background: rgba(62, 207, 207, 0.08); border: 1px solid rgba(62, 207, 207, 0.25); border-radius: 12px; padding: 20px; margin-bottom: 24px;">
+                        <p style="margin: 0 0 4px; font-size: 13px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px;">Your Selected Plan</p>
+                        <p style="margin: 0; font-size: 20px; font-weight: 700; color: #3ECFCF;">${displayPlan}</p>
+                        <p style="margin: 4px 0 0; font-size: 14px; color: #cbd5e1;">${displayCredits} credits/month</p>
+                    </div>
+
+                    <h3 style="margin: 0 0 12px; font-size: 16px; color: #f8fafc;">Here's what you can do:</h3>
+                    <table style="width: 100%; margin-bottom: 24px;">
+                        <tr>
+                            <td style="padding: 8px 12px 8px 0; vertical-align: top; color: #3ECFCF; font-size: 18px;">🎨</td>
+                            <td style="padding: 8px 0; color: #cbd5e1; font-size: 14px; line-height: 1.5;"><strong style="color: #f8fafc;">Generate Ad Creatives</strong> — AI-powered static ads optimized for Facebook & Instagram</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 12px 8px 0; vertical-align: top; color: #3ECFCF; font-size: 18px;">🛍️</td>
+                            <td style="padding: 8px 0; color: #cbd5e1; font-size: 14px; line-height: 1.5;"><strong style="color: #f8fafc;">Connect Shopify</strong> — Import your products and auto-generate landing pages</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 12px 8px 0; vertical-align: top; color: #3ECFCF; font-size: 18px;">📊</td>
+                            <td style="padding: 8px 0; color: #cbd5e1; font-size: 14px; line-height: 1.5;"><strong style="color: #f8fafc;">Ad Library</strong> — Browse and manage all your generated ads in one place</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 8px 12px 8px 0; vertical-align: top; color: #3ECFCF; font-size: 18px;">🚀</td>
+                            <td style="padding: 8px 0; color: #cbd5e1; font-size: 14px; line-height: 1.5;"><strong style="color: #f8fafc;">Multiple Brands</strong> — Manage unlimited brands from a single dashboard</td>
+                        </tr>
+                    </table>
+
+                    <div style="text-align: center; margin-bottom: 24px;">
+                        <a href="https://app.staticengine.com/dashboard" 
+                           style="display: inline-block; background: linear-gradient(135deg, #3ECFCF, #2bb5b5); color: #0f172a; font-weight: 700; font-size: 15px; padding: 14px 40px; border-radius: 10px; text-decoration: none;">
+                            Go to Dashboard →
+                        </a>
+                    </div>
+
+                    <p style="color: #64748b; font-size: 13px; line-height: 1.6; margin: 0; border-top: 1px solid #334155; padding-top: 20px;">
+                        If you have any questions, just reply to this email — we're happy to help.<br/>
+                        <br/>
+                        — The Static Engine Team<br/>
+                        <span style="color: #475569;">Korsica Brands LLC · Los Angeles, California</span>
+                    </p>
+                </div>
+            </div>
         `;
         await this.send(to, subject, html);
     }
