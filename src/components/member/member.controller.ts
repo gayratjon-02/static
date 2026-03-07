@@ -40,8 +40,10 @@ export class MemberController {
 	}
 
 	@Post('google-auth')
-	async googleLogin(@Body() input: GoogleLoginDto): Promise<AuthResponse> {
-		return this.memberService.googleLogin(input);
+	async googleLogin(@Body() input: GoogleLoginDto, @Req() req: Request): Promise<AuthResponse> {
+		const ipAddress = req.ip || req.connection.remoteAddress || '0.0.0.0';
+		const userAgent = req.headers['user-agent'] || 'Unknown';
+		return this.memberService.googleLogin(input, ipAddress, userAgent);
 	}
 
 	@Post('forgot-password-flow')

@@ -42,9 +42,9 @@ export class MemberService {
 		return this.authService.login(input);
 	}
 
-	async googleLogin(input: GoogleLoginDto): Promise<AuthResponse> {
+	async googleLogin(input: GoogleLoginDto, ipAddress: string, userAgent: string): Promise<AuthResponse> {
 		console.log('MemberService: googleLogin');
-		return this.authService.googleLogin(input);
+		return this.authService.googleLogin(input, ipAddress, userAgent);
 	}
 
 	async adminLogin(input: AdminLoginDto): Promise<AdminAuthResponse> {

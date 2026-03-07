@@ -1,4 +1,4 @@
-import { IsEmail, IsNotEmpty, IsString, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, MinLength, IsOptional, IsBoolean } from 'class-validator';
 
 export class LoginDto {
 	@IsEmail()
@@ -15,4 +15,12 @@ export class GoogleLoginDto {
 	@IsString()
 	@IsNotEmpty()
 	access_token: string;
+
+	@IsBoolean()
+	@IsOptional()
+	tos_accepted?: boolean;
+
+	@IsString()
+	@IsOptional()
+	tos_version?: string;
 }

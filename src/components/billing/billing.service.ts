@@ -70,7 +70,7 @@ export class BillingService {
 		if (updateError) {
 			this.logger.error(
 				`CRITICAL: Stripe customer (${customer.id}) created but not saved to DB! ` +
-					`userId: ${userId}, error: ${updateError.message}`,
+				`userId: ${userId}, error: ${updateError.message}`,
 			);
 		}
 
@@ -749,6 +749,32 @@ export class BillingService {
 
 		console.log('  ✅ CHECKOUT COMPLETED FULLY: user=' + userId + ', tier=' + tier);
 		this.logger.log(`Subscription activated: user=${userId}, tier=${tier}, credits=${tierData.credits_per_month}`);
+
+		// Send welcome email after successful payment
+		const { data: paidUser } = await this.databaseService.client
+			.from('users')
+			.select('email, full_name')
+			.eq('_id', userId)
+			.single();
+
+		if (paidUser?.email) {
+			const { data: tierDisplay } = await this.databaseService.client
+				.from('subscription_tiers')
+				.select('display_name, credits_per_month')
+				.eq('tier_key', tier)
+				.single();
+
+			const planName = tierDisplay?.display_name || tier;
+			const planCredits = tierDisplay?.credits_per_month?.toLocaleString() || String(tierData.credits_per_month);
+
+			this.emailService.sendWelcome(
+				paidUser.email,
+				paidUser.full_name ?? '',
+				planName,
+				planCredits,
+			).catch(() => { });
+			console.log('  📧 Welcome email sent to:', paidUser.email);
+		}
 	}
 
 	// ── EVENT 2: invoice.payment_succeeded ───────
@@ -871,7 +897,7 @@ export class BillingService {
 			.eq('_id', sub.user_id)
 			.single();
 		if (user?.email) {
-			this.emailService.sendPaymentFailed(user.email, user.full_name || undefined).catch(() => {});
+			this.emailService.sendPaymentFailed(user.email, user.full_name || undefined).catch(() => { });
 		}
 
 		this.logger.warn(`Payment failed: user=${sub.user_id}`);
@@ -949,7 +975,7 @@ export class BillingService {
 			.eq('_id', sub.user_id)
 			.single();
 		if (user?.email) {
-			this.emailService.sendSubscriptionCancelled(user.email, user.full_name || undefined).catch(() => {});
+			this.emailService.sendSubscriptionCancelled(user.email, user.full_name || undefined).catch(() => { });
 		}
 
 		const { data: freeTier } = await this.databaseService.client

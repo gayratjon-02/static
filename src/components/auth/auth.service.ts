@@ -33,7 +33,7 @@ export class AuthService {
 
 	// ── USER AUTH ────────────────────────────────────────────────
 
-	async googleLogin(input: GoogleLoginDto): Promise<AuthResponse> {
+	async googleLogin(input: GoogleLoginDto, ipAddress: string, userAgent: string): Promise<AuthResponse> {
 		console.log('AuthService: googleLogin');
 
 		const res = await fetch(GOOGLE_USERINFO_URL, {
@@ -124,12 +124,25 @@ export class AuthService {
 
 		if (error || !newUser) throw new BadRequestException(Message.CREATE_FAILED);
 
+		// Record ToS acceptance for new Google signups
+		if (input.tos_accepted && input.tos_version) {
+			await this.databaseService.client
+				.from('tos_acceptances')
+				.insert({
+					user_id: newUser._id,
+					tos_version: input.tos_version,
+					ip_address: ipAddress,
+					user_agent: userAgent,
+				})
+				.then(({ error: tosError }) => {
+					if (tosError) console.error('Google signup ToS acceptance error:', tosError);
+				});
+		}
+
 		const accessToken = this.createToken({
 			id: newUser._id,
 			subscription_tier: newUser.subscription_tier,
 		});
-
-		this.emailService.sendWelcome(newUser.email, newUser.full_name ?? '').catch(() => { });
 
 		const { password_hash: _, ...memberWithoutPassword } = newUser;
 		return { accessToken, member: memberWithoutPassword, needs_subscription: true };
@@ -180,15 +193,6 @@ export class AuthService {
 			id: newUser._id,
 			subscription_tier: newUser.subscription_tier,
 		});
-
-		const tierInfo: Record<string, { name: string; credits: string }> = {
-			starter: { name: 'Starter', credits: '250' },
-			pro: { name: 'Pro', credits: '750' },
-			growth: { name: 'Growth Engine', credits: '2,000' },
-			free: { name: 'Free', credits: '25' },
-		};
-		const plan = tierInfo[input.subscription_tier || 'free'] || tierInfo.free;
-		this.emailService.sendWelcome(newUser.email, newUser.full_name ?? '', plan.name, plan.credits).catch(() => { });
 
 		const { password_hash: _, ...memberWithoutPassword } = newUser;
 
