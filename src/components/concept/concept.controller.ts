@@ -25,6 +25,7 @@ import { AdminRole } from '../../libs/enums/common.enum';
 import { CreateConceptDto } from '../../libs/dto/concept/create-concept.dto';
 import { UpdateConceptDto } from '../../libs/dto/concept/update-concept.dto';
 import { CreateCategoryDto } from '../../libs/dto/concept/create-category.dto';
+import { UpdateCategoryDto } from '../../libs/dto/concept/update-category.dto';
 import { ReorderConceptsDto } from '../../libs/dto/concept/reorder-concepts.dto';
 import { AdConcept, ConceptCategoryItem } from '../../libs/types/concept/concept.type';
 
@@ -68,6 +69,22 @@ export class ConceptController {
 	@Post('createCategoryByAdmin')
 	public async createCategory(@Body() input: CreateCategoryDto): Promise<ConceptCategoryItem> {
 		return this.conceptService.createCategory(input);
+	}
+
+	/** POST /concept/updateCategoryByAdmin/:id — admin only */
+	@UseGuards(RolesGuard)
+	@Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_ADMIN)
+	@Post('updateCategoryByAdmin/:id')
+	public async updateCategory(@Param('id') id: string, @Body() input: UpdateCategoryDto): Promise<ConceptCategoryItem> {
+		return this.conceptService.updateCategory(id, input);
+	}
+
+	/** POST /concept/deleteCategoryByAdmin/:id — SUPER_ADMIN only */
+	@UseGuards(RolesGuard)
+	@Roles(AdminRole.SUPER_ADMIN)
+	@Post('deleteCategoryByAdmin/:id')
+	public async deleteCategory(@Param('id') id: string): Promise<{ message: string }> {
+		return this.conceptService.deleteCategory(id);
 	}
 
 	// =============================================

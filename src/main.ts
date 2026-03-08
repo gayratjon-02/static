@@ -26,7 +26,7 @@ async function bootstrap() {
 				},
 			},
 			hsts: {
-				maxAge: 31536000,       // 1 year
+				maxAge: 31536000, // 1 year
 				includeSubDomains: true,
 				preload: true,
 			},
@@ -44,10 +44,7 @@ async function bootstrap() {
 	app.useBodyParser('raw', { limit: '10mb' });
 
 	// ── CORS ───────────────────────────────────────────────────────────────
-	const corsOrigins = [
-		'http://localhost:3000',
-		'http://localhost:4010',
-	];
+	const corsOrigins = ['http://localhost:3000', 'http://localhost:4010'];
 	// Add production frontend URL from env (never expose raw IP to clients)
 	if (process.env.FRONTEND_URL) {
 		corsOrigins.push(process.env.FRONTEND_URL);

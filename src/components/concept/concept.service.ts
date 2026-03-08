@@ -4,6 +4,7 @@ import { ConceptConfigService } from './concept-config.service';
 import { CreateConceptDto } from '../../libs/dto/concept/create-concept.dto';
 import { UpdateConceptDto } from '../../libs/dto/concept/update-concept.dto';
 import { CreateCategoryDto } from '../../libs/dto/concept/create-category.dto';
+import { UpdateCategoryDto } from '../../libs/dto/concept/update-category.dto';
 import { ReorderConceptsDto } from '../../libs/dto/concept/reorder-concepts.dto';
 import { Message } from '../../libs/enums/common.enum';
 import { T } from '../../libs/types/common';
@@ -121,6 +122,75 @@ export class ConceptService {
 		}
 
 		return data as ConceptCategoryItem;
+	}
+
+	async updateCategory(id: string, input: UpdateCategoryDto): Promise<ConceptCategoryItem> {
+		console.log('ConceptService: updateCategory');
+
+		const updateData: Record<string, unknown> = {};
+		if (input.name !== undefined) updateData.name = input.name;
+		if (input.description !== undefined) updateData.description = input.description;
+		if (input.display_order !== undefined) updateData.display_order = input.display_order;
+
+		if (input.slug !== undefined) {
+			updateData.slug = input.slug;
+		} else if (input.name !== undefined) {
+			updateData.slug = input.name
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, '_')
+				.replace(/^_|_$/g, '');
+		}
+
+		if (updateData.slug) {
+			const { data: existing } = await this.databaseService.client
+				.from('concept_categories')
+				.select('_id')
+				.eq('slug', updateData.slug as string)
+				.neq('_id', id)
+				.single();
+
+			if (existing) {
+				throw new BadRequestException('Category with this slug already exists');
+			}
+		}
+
+		const { data, error } = await this.databaseService.client
+			.from('concept_categories')
+			.update(updateData)
+			.eq('_id', id)
+			.select('*')
+			.single();
+
+		if (error || !data) {
+			throw new BadRequestException(Message.UPDATE_FAILED);
+		}
+
+		return data as ConceptCategoryItem;
+	}
+
+	async deleteCategory(id: string): Promise<{ message: string }> {
+		console.log('ConceptService: deleteCategory');
+
+		const { data: concepts } = await this.databaseService.client
+			.from('ad_concepts')
+			.select('_id')
+			.eq('category_id', id)
+			.limit(1);
+
+		if (concepts && concepts.length > 0) {
+			throw new BadRequestException('Cannot delete category that has concepts. Move or delete concepts first.');
+		}
+
+		const { error } = await this.databaseService.client
+			.from('concept_categories')
+			.delete()
+			.eq('_id', id);
+
+		if (error) {
+			throw new BadRequestException(Message.REMOVE_FAILED);
+		}
+
+		return { message: 'Category deleted successfully' };
 	}
 
 	private async getNextCategoryOrder(): Promise<number> {
