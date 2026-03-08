@@ -81,6 +81,13 @@ export class MemberController {
 		return this.memberService.generateAdminInvite(input.role, adminId);
 	}
 
+	@UseGuards(RolesGuard)
+	@Roles(AdminRole.SUPER_ADMIN)
+	@Get('adminInvites')
+	async adminGetInvites() {
+		return this.memberService.adminGetInvites();
+	}
+
 	// ── AUTHENTICATED USER ───────────────────────────────────────
 
 	@UseGuards(AuthGuard)

@@ -140,6 +140,21 @@ export class MemberService {
 		return { inviteToken, expiresAt: expiresAt.toISOString() };
 	}
 
+	async adminGetInvites() {
+		console.log('MemberService: adminGetInvites');
+		const { data, error } = await this.databaseService.client
+			.from('admin_invites')
+			.select('*')
+			.order('created_at', { ascending: false });
+
+		if (error) {
+			console.error('Failed to fetch admin invites:', error);
+			throw new InternalServerErrorException('Could not fetch invite tokens');
+		}
+
+		return data;
+	}
+
 	// ── PASSWORD RESET (PUBLIC) ──────────────────────────────────
 
 	async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {
