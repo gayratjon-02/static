@@ -690,7 +690,12 @@ export class GenerationProcessor extends WorkerHost {
 			const brandOverrideFix = brandName ? `═══ HIGHEST PRIORITY — BRAND NAME ═══\nTHE BRAND NAME IS: "${brandName}"\nSPELL IT: ${brandName.split('').join(' - ')}\n- Display "${brandName}" as the brand name — NOT any text from the logo image\n- If the logo image shows a different brand name — IGNORE IT, use "${brandName}"\n═══════════════════════════════════════\n\n` : '';
 			const productContext = this.buildProductContext(brandSnapshot as Brand, productSnapshot as Product);
 			const textSpec = this.buildTextRenderingSpec(claudeResponse);
-			const basePrompt = brandOverrideFix + productContext + textSpec + cleanedPromptFix;
+
+			const errorFixDirective = error_description
+				? `═══ CRITICAL: FIX THIS SPECIFIC ERROR ═══\nThe user reported the following error in the previous image:\n"${error_description}"\n\nYou MUST fix EXACTLY this issue. This is the #1 priority.\nDo NOT ignore this instruction. The entire purpose of this regeneration is to fix the error described above.\n═══════════════════════════════════════════\n\n`
+				: '';
+
+			const basePrompt = errorFixDirective + brandOverrideFix + productContext + textSpec + cleanedPromptFix;
 
 			// Generate all 3 ratios with retry logic
 			const [result1x1, result9x16, result16x9] = await Promise.all([
