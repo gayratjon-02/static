@@ -1,8 +1,11 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '../auth/guards/auth.guard';
-import { ApiKeyGuard } from '../auth/guards/api-key.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
 import { AuthMember } from '../auth/decorators/authMember.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { AdminRole } from '../../libs/enums/common.enum';
 import { Member } from '../../libs/types/member/member.type';
+import { AdminMember } from '../../libs/types/admin/admin.type';
 import { CanvaService } from './canva.service';
 import { CreateCanvaOrderDto } from './dto/create-canva-order.dto';
 import { FulfillCanvaOrderDto } from './dto/fulfill-canva-order.dto';
@@ -27,31 +30,38 @@ export class CanvaController {
 		return this.canvaService.getMyOrders(authMember._id);
 	}
 
-	// ── ADMIN (API Key protected) ────────────────────────────────
+	// ── ADMIN ────────────────────────────────────────────────────
 
-	@UseGuards(ApiKeyGuard)
+	@Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_ADMIN)
+	@UseGuards(RolesGuard)
 	@Get('orders/all')
 	async getAllOrdersAdmin() {
 		console.log('CanvaController: GET /orders/all');
 		return this.canvaService.getAllOrdersAdmin();
 	}
 
-	@UseGuards(ApiKeyGuard)
+	@Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_ADMIN)
+	@UseGuards(RolesGuard)
 	@Patch('orders/:id/start')
-	async startOrder(@Param('id') id: string) {
+	async startOrder(
+		@Param('id') id: string,
+		@AuthMember() adminMember: AdminMember,
+	) {
 		console.log('CanvaController: PATCH /orders/:id/start');
-		await this.canvaService.startOrder(id, 'admin');
+		await this.canvaService.startOrder(id, adminMember._id);
 		return { success: true };
 	}
 
-	@UseGuards(ApiKeyGuard)
+	@Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_ADMIN)
+	@UseGuards(RolesGuard)
 	@Patch('orders/:id/fulfill')
 	async fulfillOrder(
 		@Param('id') id: string,
 		@Body() dto: FulfillCanvaOrderDto,
+		@AuthMember() adminMember: AdminMember,
 	) {
 		console.log('CanvaController: PATCH /orders/:id/fulfill');
-		await this.canvaService.fulfillOrder(id, dto.canva_link, 'admin');
+		await this.canvaService.fulfillOrder(id, dto.canva_link, adminMember._id);
 		return { success: true };
 	}
 }
