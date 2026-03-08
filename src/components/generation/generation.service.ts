@@ -3,14 +3,13 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { v4 as uuidv4 } from 'uuid';
 import { DatabaseService } from '../../database/database.service';
-import { ClaudeService } from '../../libs/services/claude.service';
 import { CreateGenerationDto } from '../../libs/dto/generation/create-generation.dto';
 import { GetGenerationsDto } from '../../libs/dto/generation/get-generations.dto';
 import { FixErrorsDto } from '../../libs/dto/generation/fix-errors.dto';
 import { Message } from '../../libs/enums/common.enum';
 import { GenerationStatus } from '../../libs/enums/generation/generation.enum';
 import { Member } from '../../libs/types/member/member.type';
-import { Generation, GenerationJobData, GenerationStatusResponse, GenerationResultsResponse, FixErrorsJobData, ExportRatiosResponse, ClaudeResponseJson } from '../../libs/types/generation/generation.type';
+import { Generation, GenerationJobData, GenerationStatusResponse, GenerationResultsResponse, FixErrorsJobData, ExportRatiosResponse } from '../../libs/types/generation/generation.type';
 import { SystemConfigService } from '../system-config/system-config.service';
 
 @Injectable()
@@ -19,7 +18,6 @@ export class GenerationService {
 
 	constructor(
 		private readonly databaseService: DatabaseService,
-		private readonly claudeService: ClaudeService,
 		private readonly systemConfigService: SystemConfigService,
 		@InjectQueue('generation') private readonly generationQueue: Queue,
 	) {}
@@ -136,56 +134,7 @@ export class GenerationService {
 				if (error) this.logger.warn(`credit_transactions insert failed (non-blocking): ${error.message}`);
 			});
 
-			// 7. Claude API — get 6 variations in one call (optimization)
-			this.logger.log(`Fetching brand/product/concept for Claude pre-generation...`);
-			const [brandData, productData, conceptData] = await Promise.all([
-				this.databaseService.client.from('brands').select('*').eq('_id', brand_id).single(),
-				this.databaseService.client.from('products').select('*').eq('_id', product_id).single(),
-				this.databaseService.client.from('ad_concepts').select('*').eq('_id', concept_id).single(),
-			]);
-
-			let claudeVariations: ClaudeResponseJson[] = [];
-			let productDescription = '';
-
-			const productImages = [
-				productData.data?.photo_url,
-				productData.data?.back_image_url,
-				...(productData.data?.reference_image_urls ?? []),
-			].filter(Boolean) as string[];
-
-			try {
-				this.logger.log(`Calling Claude for 6 variations + product analysis (batch-level, single pass)...`);
-
-				const [claudeResult, imageAnalysis] = await Promise.all([
-					this.claudeService.generate6Variations(
-						brandData.data,
-						productData.data,
-						conceptData.data,
-						important_notes ?? '',
-					),
-					productImages.length > 0
-						? this.claudeService.analyzeProductImages(productImages)
-						: Promise.resolve(''),
-				]);
-
-				claudeVariations = claudeResult.variations;
-				productDescription = imageAnalysis;
-				this.logger.log(`Claude returned ${claudeVariations.length} variations + ${productDescription.length} chars product analysis`);
-
-				if (claudeResult.claude_usage) {
-					const { input_tokens, output_tokens } = claudeResult.claude_usage;
-					const claudeCost = (input_tokens * 3 + output_tokens * 15) / 1_000_000;
-					const imagenEstimate = 6 * 3 * 0.04;
-					this.logger.log(
-						`Batch ${batchId} cost estimate — Claude: $${claudeCost.toFixed(4)} (${input_tokens}in + ${output_tokens}out tokens) | Imagen: ~$${imagenEstimate.toFixed(2)} | Total: ~$${(claudeCost + imagenEstimate).toFixed(2)}`,
-					);
-				}
-			} catch (claudeErr: unknown) {
-				const errMsg = claudeErr instanceof Error ? claudeErr.message : String(claudeErr);
-				this.logger.warn(`Claude pre-generation failed, jobs will call Claude individually: ${errMsg}`);
-			}
-
-			// 8. Add jobs to BullMQ queue (6 jobs, each with Claude variation + shared product description)
+			// 7. Add jobs to BullMQ queue — Claude calls happen inside each job processor
 			const jobs = generatedAds.map((ad, i) => ({
 				name: 'create-ad',
 				data: {
@@ -197,8 +146,6 @@ export class GenerationService {
 					generated_ad_id: ad._id,
 					batch_id: batchId,
 					variation_index: i,
-					claude_variation: claudeVariations[i] || undefined,
-					product_description: productDescription || undefined,
 				},
 				opts: {
 					removeOnComplete: true,
@@ -208,7 +155,7 @@ export class GenerationService {
 
 			await this.generationQueue.addBulk(jobs);
 
-			this.logger.log(`Generation batch queued: ${batchId} (${generatedAds.length} variations, claude pre-generated: ${claudeVariations.length > 0})`);
+			this.logger.log(`Generation batch queued: ${batchId} (${generatedAds.length} variations)`);
 
 			// 8. Response qaytarish
 			return {
