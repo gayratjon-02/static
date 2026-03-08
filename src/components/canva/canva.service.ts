@@ -128,7 +128,7 @@ export class CanvaService {
 
 		const { data, error } = await this.databaseService.client
 			.from('canva_orders')
-			.select('_id, generated_ad_id, status, canva_link, price_paid_cents, created_at, fulfilled_at')
+			.select('_id, generated_ad_id, status, canva_link, price_paid_cents, created_at, fulfilled_at, generated_ads:generated_ad_id(ad_name, image_url_1x1)')
 			.eq('user_id', userId)
 			.order('created_at', { ascending: false });
 
