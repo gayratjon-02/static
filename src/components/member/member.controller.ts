@@ -77,8 +77,7 @@ export class MemberController {
 		@Body() input: GenerateInviteDto,
 		@Req() req: Request
 	): Promise<{ inviteToken: string, expiresAt: string }> {
-		// Uses the ID of the Super Admin generating the invite
-		const adminId = (req as any).adminUser._id;
+		const adminId = (req as any).authMember._id;
 		return this.memberService.generateAdminInvite(input.role, adminId);
 	}
 

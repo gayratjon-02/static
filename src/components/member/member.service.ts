@@ -119,9 +119,9 @@ export class MemberService {
 		const crypto = require('crypto');
 		const inviteToken = crypto.randomBytes(8).toString('hex');
 
-		// Expires in 24 hours
+		// Expires in 2 days
 		const expiresAt = new Date();
-		expiresAt.setHours(expiresAt.getHours() + 24);
+		expiresAt.setDate(expiresAt.getDate() + 2);
 
 		const { error } = await this.databaseService.client
 			.from('admin_invites')
