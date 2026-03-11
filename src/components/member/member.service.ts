@@ -168,6 +168,21 @@ export class MemberService {
 		return data;
 	}
 
+	async adminDeleteInvite(inviteId: string): Promise<{ message: string }> {
+		console.log('MemberService: adminDeleteInvite');
+		const { error } = await this.databaseService.client
+			.from('admin_invites')
+			.delete()
+			.eq('_id', inviteId);
+
+		if (error) {
+			console.error('Failed to delete invite:', error);
+			throw new InternalServerErrorException('Could not delete invite token');
+		}
+
+		return { message: 'Invite token deleted successfully' };
+	}
+
 	// ── PASSWORD RESET (PUBLIC) ──────────────────────────────────
 
 	async requestPasswordReset(email: string): Promise<{ success: boolean; message: string }> {

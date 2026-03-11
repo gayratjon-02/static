@@ -88,6 +88,13 @@ export class MemberController {
 		return this.memberService.adminGetInvites();
 	}
 
+	@UseGuards(RolesGuard)
+	@Roles(AdminRole.SUPER_ADMIN)
+	@Post('deleteAdminInvite/:id')
+	async deleteAdminInvite(@Param('id') id: string) {
+		return this.memberService.adminDeleteInvite(id);
+	}
+
 	// ── AUTHENTICATED USER ───────────────────────────────────────
 
 	@UseGuards(AuthGuard)
