@@ -72,7 +72,6 @@ export class CanvaService {
 			.from('canva_orders')
 			.update({
 				status: 'in_progress',
-				fulfilled_by: adminUserId,
 			})
 			.eq('_id', orderId);
 
@@ -104,11 +103,11 @@ export class CanvaService {
 				status: 'fulfilled',
 				canva_link: canvaLink,
 				fulfilled_at: new Date().toISOString(),
-				fulfilled_by: adminUserId,
 			})
 			.eq('_id', orderId);
 
 		if (updateError) {
+			console.error('CanvaService: fulfillOrder updateError:', JSON.stringify(updateError));
 			throw new BadRequestException(Message.CANVA_ORDER_UPDATE_FAILED);
 		}
 
