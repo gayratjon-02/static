@@ -79,6 +79,14 @@ export class ConceptController {
 		return this.conceptService.updateCategory(id, input);
 	}
 
+	/** POST /concept/normalizeCategoryOrdersByAdmin — admin, fix display_order gaps */
+	@UseGuards(RolesGuard)
+	@Roles(AdminRole.SUPER_ADMIN, AdminRole.CONTENT_ADMIN)
+	@Post('normalizeCategoryOrdersByAdmin')
+	public async normalizeCategoryOrders(): Promise<{ message: string }> {
+		return this.conceptService.normalizeCategoryOrders();
+	}
+
 	/** POST /concept/deleteCategoryByAdmin/:id — SUPER_ADMIN only */
 	@UseGuards(RolesGuard)
 	@Roles(AdminRole.SUPER_ADMIN)

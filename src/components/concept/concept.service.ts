@@ -224,6 +224,35 @@ export class ConceptService {
 		}
 	}
 
+	async normalizeCategoryOrders(): Promise<{ message: string }> {
+		console.log('ConceptService: normalizeCategoryOrders');
+
+		const { data: categories } = await this.databaseService.client
+			.from('concept_categories')
+			.select('_id, display_order')
+			.order('display_order', { ascending: true })
+			.order('created_at', { ascending: true });
+
+		if (!categories || categories.length === 0) {
+			return { message: 'No categories to normalize' };
+		}
+
+		const updates = categories
+			.map((cat, index) => ({ _id: cat._id, display_order: index + 1 }))
+			.filter((u, i) => u.display_order !== categories[i].display_order);
+
+		await Promise.all(
+			updates.map((u) =>
+				this.databaseService.client
+					.from('concept_categories')
+					.update({ display_order: u.display_order })
+					.eq('_id', u._id),
+			),
+		);
+
+		return { message: `Normalized ${updates.length} categories` };
+	}
+
 	async deleteCategory(id: string): Promise<{ message: string }> {
 		console.log('ConceptService: deleteCategory');
 
