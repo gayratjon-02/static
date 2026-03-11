@@ -62,17 +62,17 @@ import { LoggingInterceptor } from './libs/interceptor/Logging.interceptor';
 			envFilePath: `.env`,
 		}),
 
-		// ── Global throttler: 300 requests per 60 seconds per IP ────────────
+		// ── Global throttler: 1500 requests per 60 seconds per IP ───────────
 		ThrottlerModule.forRoot([
 			{
 				name: 'default',
 				ttl: 60000,      // 60 seconds
-				limit: 300,      // 300 requests per window
+				limit: 1500,     // 1500 requests per window
 			},
 			{
 				name: 'short',
 				ttl: 5000,       // 5 seconds
-				limit: 60,       // burst protection: max 60 req in 5s
+				limit: 300,      // burst protection: max 300 req in 5s
 			},
 		]),
 
