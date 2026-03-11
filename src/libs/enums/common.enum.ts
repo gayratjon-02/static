@@ -70,6 +70,9 @@ export enum Message {
 	CANVA_ORDER_ALREADY_FULFILLED = 'Canva order is already fulfilled!',
 	CANVA_ORDER_UPDATE_FAILED = 'Failed to update Canva order!',
 	CANVA_ORDERS_LOAD_FAILED = 'Failed to load Canva orders!',
+
+	// Admin
+	MAX_SUPER_ADMINS_REACHED = 'Maximum of 5 Super Admins allowed in the system.',
 }
 
 /** User account status */

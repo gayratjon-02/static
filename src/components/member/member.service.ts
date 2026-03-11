@@ -71,9 +71,15 @@ export class MemberService {
 			throw new UnauthorizedException('An invite token is required to register as an admin.');
 		}
 
-		// 3. Prevent creating more than one SUPER_ADMIN (Optional but requested: "SUPER ADMIN bir dona bolsin")
 		if (input.role === AdminRole.SUPER_ADMIN) {
-			throw new BadRequestException('Only one SUPER_ADMIN is allowed in the system.');
+			const { count } = await this.databaseService.client
+				.from('admin_users')
+				.select('*', { count: 'exact', head: true })
+				.eq('role', AdminRole.SUPER_ADMIN);
+
+			if ((count ?? 0) >= 5) {
+				throw new BadRequestException(Message.MAX_SUPER_ADMINS_REACHED);
+			}
 		}
 
 		// 4. Validate the invite token
@@ -112,7 +118,14 @@ export class MemberService {
 
 	async generateAdminInvite(role: AdminRole, createdBy: string): Promise<{ inviteToken: string, expiresAt: string }> {
 		if (role === AdminRole.SUPER_ADMIN) {
-			throw new BadRequestException('Cannot invite another SUPER_ADMIN. Only one is allowed.');
+			const { count } = await this.databaseService.client
+				.from('admin_users')
+				.select('*', { count: 'exact', head: true })
+				.eq('role', AdminRole.SUPER_ADMIN);
+
+			if ((count ?? 0) >= 5) {
+				throw new BadRequestException(Message.MAX_SUPER_ADMINS_REACHED);
+			}
 		}
 
 		// Generate a simple 16-character token
