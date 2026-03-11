@@ -172,7 +172,9 @@ export class GeminiService {
 		const enhancedPrompt = `${referenceInstructions}${aspectInstruction}\n\nProfessional commercial advertisement photo. ${sanitizedPrompt}. High quality studio lighting, sharp details, clean background, modern minimal design. CRITICAL: Any human models must be FULLY CLOTHED. Do NOT render any hex codes, color codes, or technical codes as visible text in the image. Render all text EXACTLY as specified with correct spelling. CRITICAL: Maintain the exact same color palette across all variations — do not shift or alter brand colors.\n\n═══ PRODUCT FIDELITY — ABSOLUTE RULE ═══\nThe product in this ad must be an EXACT reproduction of the provided product reference photo.\nDraw ONLY what is visible in the product photo — nothing more, nothing less.\nDo NOT add ANY objects, items, or elements that are NOT in the product reference photo.\nFORBIDDEN additions: extra product units, figurines, mascots, animals, floating ingredients, splashes, powder, smoke, props, accessories, decorative objects, scattered pills/capsules, leaves, flowers, or any embellishments.\nIf the product has packaging (box, pouch, wrapper), draw it EXACTLY as shown in the reference — do NOT remove or redesign it.\nThe product must look like the REAL photo, not an idealized or "improved" version.\n═══════════════════════════════════════\n\n═══ IGNORE TECHNICAL TEXT (CRITICAL) ═══\nThe image must contain ONLY the marketing text listed in TEXT RENDERING REQUIREMENTS above.\nDo NOT render ANY of the following as visible text in the image:\n- Pixel dimensions (e.g. "115px", "1080x1080", "48pt")\n- CSS values or code (e.g. "font-size", "margin", "padding")\n- File paths, URLs, or technical identifiers\n- Numbers followed by units (px, rem, em, pt, vw, vh)\n- Aspect ratio labels (e.g. "1:1", "9:16", "16:9")\n- Any debug, metadata, or instructional text from this prompt\nIf you see ANY technical-looking text in this prompt, it is an INSTRUCTION — do NOT render it visually.\n\n═══ WORD DUPLICATION PREVENTION ═══\n- NEVER render the same word twice in a row.\n- Before starting each new line of text, check the last word of the previous line — do NOT repeat it.\n- Wrong: "both both", "my my", "the the", "and and" — each word must appear only ONCE.\n- The rendered word count must EXACTLY match the word count specified in TEXT RENDERING REQUIREMENTS.\n- If the text says 8 words, render exactly 8 words — no more, no fewer.\n\n═══ FINAL REMINDER — TEXT ACCURACY ═══\nBefore generating the image, verify EVERY word you are about to render:\n1. Check each word letter by letter against the TEXT RENDERING REQUIREMENTS section above.\n2. If a word looks wrong or you are unsure of the spelling, OMIT the word entirely.\n3. Render FEWER words perfectly rather than MORE words with errors.\n4. NEVER invent, paraphrase, or abbreviate any text — copy the exact strings provided.\n5. Short, simple words only — if the text is long, prioritize the headline and CTA.\n6. NEVER render dimension values, CSS properties, or technical metadata as visible text.\n7. NEVER duplicate a word — scan for consecutive identical words and remove the duplicate.`;
 
 		const requestId = Math.random().toString(36).substring(2, 8);
-		this.logger.log(`🎨 [${requestId}] ===== GEMINI FLASH IMAGE START | ${ratioText} | Model: ${this.MODEL} | Refs: ${refCount} =====`);
+		this.logger.log(
+			`🎨 [${requestId}] ===== GEMINI FLASH IMAGE START | ${ratioText} | Model: ${this.MODEL} | Refs: ${refCount} =====`,
+		);
 		this.logger.log(`🎨 [${requestId}] Prompt length: ${enhancedPrompt.length} chars`);
 
 		try {
@@ -282,7 +284,14 @@ export class GeminiService {
 		imageMeta?: ReferenceImageMeta,
 	): Promise<GeminiImageResult> {
 		try {
-			const result = await this.generateImages(prompt, aspectRatio, resolution, userApiKey, referenceImageParts, imageMeta);
+			const result = await this.generateImages(
+				prompt,
+				aspectRatio,
+				resolution,
+				userApiKey,
+				referenceImageParts,
+				imageMeta,
+			);
 
 			if (result.images.length > 0) {
 				return result.images[0];
@@ -306,7 +315,7 @@ export class GeminiService {
 		imageMeta?: ReferenceImageMeta,
 	): Promise<GeminiImageResult> {
 		const imageParts: Array<{ data: string; mimeType: string }> = [];
-		for (const url of (referenceImages ?? [])) {
+		for (const url of referenceImages ?? []) {
 			if (!url) continue;
 			try {
 				const { base64, mimeType } = await this.downloadImageAsBase64(url);
@@ -322,7 +331,15 @@ export class GeminiService {
 			enrichedPrompt = `${prompt}\n\n═══ PRODUCT VISUAL REFERENCE (HIGHEST PRIORITY) ═══\nRender the product EXACTLY as described below — do NOT generate a different-looking product.\nThe product must be LARGE and PROMINENT — occupy 40–60% of the image area.\nALL text visible on the product packaging (labels, brand name, ingredients) must be:\n  • PIXEL-PERFECT — sharp edges, no blur, no smearing\n  • CORRECTLY SPELLED — copy every letter exactly from the description\n  • READABLE at the rendered size — if text would be too small to read, scale the product up\nDo NOT invent, alter, or garble any packaging text.\n\nCRITICAL — PRODUCT FIDELITY:\n  • Draw ONLY the product as it appears in the reference photo — NO extra elements\n  • Do NOT add objects, props, ingredients, or decorations around the product\n  • Do NOT duplicate the product — show exactly the number of items in the reference\n  • If the product has a box or packaging, keep it exactly as shown\n  • The product must be a faithful copy of the reference, not an enhanced or idealized version\n\nProduct details:\n${productDescription}\n═══════════════════════════════════════════════════`;
 		}
 
-		return this.generateImage(enrichedPrompt, undefined, aspectRatio, resolution, userApiKey, imageParts.length > 0 ? imageParts : undefined, imageMeta);
+		return this.generateImage(
+			enrichedPrompt,
+			undefined,
+			aspectRatio,
+			resolution,
+			userApiKey,
+			imageParts.length > 0 ? imageParts : undefined,
+			imageMeta,
+		);
 	}
 
 	/**
@@ -342,12 +359,12 @@ export class GeminiService {
 
 		for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
 			try {
-				const currentPrompt = attempt === 0
-					? prompt
-					: this.simplifyPrompt(prompt, strategies[attempt]);
+				const currentPrompt = attempt === 0 ? prompt : this.simplifyPrompt(prompt, strategies[attempt]);
 
 				if (attempt > 0) {
-					this.logger.warn(`Retry ${attempt + 1}/${MAX_RETRIES} for ${variationLabel} using "${strategies[attempt]}" strategy`);
+					this.logger.warn(
+						`Retry ${attempt + 1}/${MAX_RETRIES} for ${variationLabel} using "${strategies[attempt]}" strategy`,
+					);
 				}
 
 				const result = await this.generateImageWithReference(
@@ -510,14 +527,11 @@ export class GeminiService {
 		let sanitized = prompt;
 
 		// Strip hex color codes — Gemini/Imagen renders them as visible text
-		sanitized = sanitized.replace(
-			/#([0-9a-fA-F]{3,8})\b/g,
-			(_match, hex) => {
-				const colorName = this.hexToColorName(hex);
-				this.logger.warn(`Stripped hex code #${hex} from prompt, replaced with "${colorName}"`);
-				return colorName;
-			},
-		);
+		sanitized = sanitized.replace(/#([0-9a-fA-F]{3,8})\b/g, (_match, hex) => {
+			const colorName = this.hexToColorName(hex);
+			this.logger.warn(`Stripped hex code #${hex} from prompt, replaced with "${colorName}"`);
+			return colorName;
+		});
 
 		// Strip CSS dimension values — Gemini renders "115px", "48px", "20rem" as visible text
 		sanitized = sanitized.replace(/\b\d+(\.\d+)?\s*px\b/gi, 'appropriate size');
@@ -531,7 +545,10 @@ export class GeminiService {
 		sanitized = sanitized.replace(/\b\d{3,4}\s*x\s*\d{3,4}\b/gi, '');
 
 		// Strip CSS-like property patterns: "font-size: 48px", "margin: 20px 10px"
-		sanitized = sanitized.replace(/\b(font-size|margin|padding|border-radius|gap|spacing|line-height|letter-spacing|width|height|top|left|right|bottom)\s*:\s*[\d\s.]+\w*/gi, '');
+		sanitized = sanitized.replace(
+			/\b(font-size|margin|padding|border-radius|gap|spacing|line-height|letter-spacing|width|height|top|left|right|bottom)\s*:\s*[\d\s.]+\w*/gi,
+			'',
+		);
 
 		// Strip percentage values used as dimensions (e.g., "80% width")
 		sanitized = sanitized.replace(/\b\d+(\.\d+)?%\s*(opacity|transparency|width|height)/gi, 'subtle $2');
@@ -579,10 +596,22 @@ export class GeminiService {
 		const max = Math.max(r, g, b);
 		const dominantColor =
 			max === r
-				? g > 150 ? 'warm yellow-orange' : b > 100 ? 'deep magenta pink' : 'rich red'
+				? g > 150
+					? 'warm yellow-orange'
+					: b > 100
+						? 'deep magenta pink'
+						: 'rich red'
 				: max === g
-					? r > 150 ? 'lime yellow-green' : b > 100 ? 'teal cyan' : 'forest green'
-					: r > 100 ? 'deep purple' : g > 100 ? 'ocean teal blue' : 'deep navy blue';
+					? r > 150
+						? 'lime yellow-green'
+						: b > 100
+							? 'teal cyan'
+							: 'forest green'
+					: r > 100
+						? 'deep purple'
+						: g > 100
+							? 'ocean teal blue'
+							: 'deep navy blue';
 
 		if (brightness > 180) return `light ${dominantColor}`;
 		if (brightness < 80) return `dark ${dominantColor}`;
@@ -664,7 +693,9 @@ export class GeminiService {
 				idx++;
 			}
 			for (let i = 2; i < productImageCount; i++) {
-				lines.push(`- Image ${idx}: PRODUCT REFERENCE ANGLE ${i - 1} — additional product view. Use to understand the product shape, colors, and details from another angle.`);
+				lines.push(
+					`- Image ${idx}: PRODUCT REFERENCE ANGLE ${i - 1} — additional product view. Use to understand the product shape, colors, and details from another angle.`,
+				);
 				idx++;
 			}
 			if (hasLogo) {
@@ -690,7 +721,7 @@ export class GeminiService {
 			'  ═══ PRODUCT RENDERING RULES (CRITICAL) ═══',
 			'  • Render the product LARGE — it should occupy 40–60% of the image area',
 			'  • The product is the HERO of this ad — do NOT shrink it to a small corner',
-			'  • Match the product\'s exact colors, shape, proportions, and material finish from the reference photo',
+			"  • Match the product's exact colors, shape, proportions, and material finish from the reference photo",
 			'  • Preserve ALL text on the product packaging (labels, brand name, ingredients, dosage) with PERFECT clarity',
 			'  • Product label text must be SHARP, READABLE, and CORRECTLY SPELLED — never blurred, smeared, or garbled',
 			'  • If the product has small text on the label, render it at a size where it remains legible',
