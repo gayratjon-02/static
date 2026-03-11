@@ -154,6 +154,24 @@ export class ConceptService {
 			}
 		}
 
+		// If display_order changed, shift other categories to avoid duplicates
+		if (input.display_order !== undefined) {
+			const { data: current } = await this.databaseService.client
+				.from('concept_categories')
+				.select('_id, display_order')
+				.eq('_id', id)
+				.single();
+
+			if (current && current.display_order !== input.display_order) {
+				await this.reorderCategoriesManually(
+					id,
+					input.display_order,
+					current.display_order as number,
+					input.display_order < (current.display_order as number) ? 'down' : 'up',
+				);
+			}
+		}
+
 		const { data, error } = await this.databaseService.client
 			.from('concept_categories')
 			.update(updateData)
@@ -166,6 +184,44 @@ export class ConceptService {
 		}
 
 		return data as ConceptCategoryItem;
+	}
+
+	private async reorderCategoriesManually(
+		targetId: string,
+		newOrder: number,
+		oldOrder: number,
+		direction: 'up' | 'down',
+	): Promise<void> {
+		const { data: allCats } = await this.databaseService.client
+			.from('concept_categories')
+			.select('_id, display_order')
+			.order('display_order', { ascending: true });
+
+		if (!allCats) return;
+
+		const others = allCats.filter((c) => c._id !== targetId);
+
+		if (direction === 'down') {
+			for (const cat of others) {
+				const order = cat.display_order as number;
+				if (order >= newOrder && order < oldOrder) {
+					await this.databaseService.client
+						.from('concept_categories')
+						.update({ display_order: order + 1 })
+						.eq('_id', cat._id);
+				}
+			}
+		} else {
+			for (const cat of others) {
+				const order = cat.display_order as number;
+				if (order > oldOrder && order <= newOrder) {
+					await this.databaseService.client
+						.from('concept_categories')
+						.update({ display_order: order - 1 })
+						.eq('_id', cat._id);
+				}
+			}
+		}
 	}
 
 	async deleteCategory(id: string): Promise<{ message: string }> {
