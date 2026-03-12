@@ -328,7 +328,7 @@ export class GeminiService {
 
 		let enrichedPrompt = prompt;
 		if (productDescription) {
-			enrichedPrompt = `${prompt}\n\n═══ PRODUCT VISUAL REFERENCE (HIGHEST PRIORITY) ═══\nRender the product EXACTLY as described below — do NOT generate a different-looking product.\nThe product must be LARGE and PROMINENT — occupy 70–85% of the image area — the product must DOMINATE the frame.\nALL text visible on the product packaging (labels, brand name, ingredients) must be:\n  • PIXEL-PERFECT — sharp edges, no blur, no smearing\n  • CORRECTLY SPELLED — copy every letter exactly from the description\n  • READABLE at the rendered size — if text would be too small to read, scale the product up\nDo NOT invent, alter, or garble any packaging text.\n\nCRITICAL — PRODUCT FIDELITY:\n  • Draw ONLY the product as it appears in the reference photo — NO extra elements\n  • Do NOT add objects, props, ingredients, or decorations around the product\n  • Do NOT duplicate the product — show exactly the number of items in the reference\n  • If the product has a box or packaging, keep it exactly as shown\n  • The product must be a faithful copy of the reference, not an enhanced or idealized version\n\nProduct details:\n${productDescription}\n═══════════════════════════════════════════════════`;
+			enrichedPrompt = `${prompt}\n\n═══ PRODUCT VISUAL REFERENCE (HIGHEST PRIORITY) ═══\nRender the product EXACTLY as described below — do NOT generate a different-looking product.\nThe product must be LARGE and PROMINENT — occupy 40–60% of the image area.\nALL text visible on the product packaging (labels, brand name, ingredients) must be:\n  • PIXEL-PERFECT — sharp edges, no blur, no smearing\n  • CORRECTLY SPELLED — copy every letter exactly from the description\n  • READABLE at the rendered size — if text would be too small to read, scale the product up\nDo NOT invent, alter, or garble any packaging text.\n\nCRITICAL — PRODUCT FIDELITY:\n  • Draw ONLY the product as it appears in the reference photo — NO extra elements\n  • Do NOT add objects, props, ingredients, or decorations around the product\n  • Do NOT duplicate the product — show exactly the number of items in the reference\n  • If the product has a box or packaging, keep it exactly as shown\n  • The product must be a faithful copy of the reference, not an enhanced or idealized version\n\nProduct details:\n${productDescription}\n═══════════════════════════════════════════════════`;
 		}
 
 		return this.generateImage(
@@ -719,7 +719,7 @@ export class GeminiService {
 		return [
 			`- Image ${idx}: PRODUCT FRONT IMAGE — this is the primary product view.`,
 			'  ═══ PRODUCT RENDERING RULES (CRITICAL) ═══',
-			'  • Render the product LARGE — it should occupy 70–85% of the image area — the product must DOMINATE the frame',
+			'  • Render the product LARGE — it should occupy 40–60% of the image area',
 			'  • The product is the HERO of this ad — do NOT shrink it to a small corner',
 			"  • Match the product's exact colors, shape, proportions, and material finish from the reference photo",
 			'  • Preserve ALL text on the product packaging (labels, brand name, ingredients, dosage) with PERFECT clarity',
