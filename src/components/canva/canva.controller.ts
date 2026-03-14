@@ -10,6 +10,8 @@ import { Member } from '../../libs/types/member/member.type';
 import { AdminMember } from '../../libs/types/admin/admin.type';
 import { CanvaService } from './canva.service';
 import { CanvaOAuthService } from './canva-oauth.service';
+import { CanvaDesignService } from './canva-design.service';
+import { CanvaEditService } from './canva-edit.service';
 import { CreateCanvaOrderDto } from './dto/create-canva-order.dto';
 import { FulfillCanvaOrderDto } from './dto/fulfill-canva-order.dto';
 
@@ -18,6 +20,8 @@ export class CanvaController {
 	constructor(
 		private readonly canvaService: CanvaService,
 		private readonly canvaOAuthService: CanvaOAuthService,
+		private readonly canvaDesignService: CanvaDesignService,
+		private readonly canvaEditService: CanvaEditService,
 		private readonly configService: ConfigService,
 	) {}
 
@@ -58,6 +62,35 @@ export class CanvaController {
 		console.log('CanvaController: POST /disconnect');
 		await this.canvaOAuthService.revokeToken(authMember._id);
 		return { success: true };
+	}
+
+	// ── CANVA DESIGN (AUTOFILL) ──────────────────────────────────
+
+	@UseGuards(AuthGuard)
+	@Post('edit/:generatedAdId')
+	async editInCanva(
+		@Param('generatedAdId') generatedAdId: string,
+		@AuthMember() authMember: Member,
+	) {
+		console.log('CanvaController: POST /edit/:generatedAdId');
+		return this.canvaEditService.editInCanva(authMember._id, generatedAdId);
+	}
+
+	@UseGuards(AuthGuard)
+	@Get('templates')
+	async listTemplates(@AuthMember() authMember: Member) {
+		console.log('CanvaController: GET /templates');
+		return this.canvaDesignService.listBrandTemplates(authMember._id);
+	}
+
+	@UseGuards(AuthGuard)
+	@Get('templates/:templateId/dataset')
+	async getTemplateDataset(
+		@Param('templateId') templateId: string,
+		@AuthMember() authMember: Member,
+	) {
+		console.log('CanvaController: GET /templates/:templateId/dataset');
+		return this.canvaDesignService.getTemplateDataset(authMember._id, templateId);
 	}
 
 	// ── USER ─────────────────────────────────────────────────────

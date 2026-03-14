@@ -75,6 +75,10 @@ export enum Message {
 	CANVA_TOKEN_EXPIRED = 'Canva session expired, please reconnect',
 	CANVA_STATE_INVALID = 'Invalid or expired OAuth state',
 	CANVA_STATE_NOT_FOUND = 'OAuth state not found or expired',
+	CANVA_TEMPLATE_NOT_CONFIGURED = 'Canva template not configured for this concept',
+	CANVA_AUTOFILL_FAILED = 'Failed to create Canva design',
+	CANVA_ASSET_UPLOAD_FAILED = 'Failed to upload asset to Canva',
+	CANVA_DESIGN_TIMEOUT = 'Canva design creation timed out',
 
 	// Admin
 	MAX_SUPER_ADMINS_REACHED = 'Maximum of 5 Super Admins allowed in the system.',
