@@ -70,6 +70,11 @@ export enum Message {
 	CANVA_ORDER_ALREADY_FULFILLED = 'Canva order is already fulfilled!',
 	CANVA_ORDER_UPDATE_FAILED = 'Failed to update Canva order!',
 	CANVA_ORDERS_LOAD_FAILED = 'Failed to load Canva orders!',
+	CANVA_NOT_CONNECTED = 'Please connect your Canva account first',
+	CANVA_AUTH_FAILED = 'Canva authentication failed',
+	CANVA_TOKEN_EXPIRED = 'Canva session expired, please reconnect',
+	CANVA_STATE_INVALID = 'Invalid or expired OAuth state',
+	CANVA_STATE_NOT_FOUND = 'OAuth state not found or expired',
 
 	// Admin
 	MAX_SUPER_ADMINS_REACHED = 'Maximum of 5 Super Admins allowed in the system.',
