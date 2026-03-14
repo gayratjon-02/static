@@ -116,11 +116,13 @@ export class GenerationProcessor extends WorkerHost {
 				this.logger.warn(`Generation ${generated_ad_id}: Rules violations: ${rulesValidation.errors.join('; ')}`);
 			}
 
-			// 5. Gemini API — generate all 3 ratios in parallel
+			// 5. Gemini API — generate ONLY the selected ratio
+			const selectedRatio = job.data.selected_ratio ?? '1:1';
+
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'generating_images',
-				message: 'Generating images (1:1, 9:16, 16:9)...',
+				message: `Generating image (${selectedRatio})...`,
 				progress_percent: 35,
 			});
 
@@ -183,12 +185,22 @@ export class GenerationProcessor extends WorkerHost {
 			// Build brand color description for ratio-specific prompts
 			const brandColorDesc = this.buildBrandColorDescription(brand);
 
-			// Ratio-specific prompts with color preservation instructions
-			// Brand name reminder appended at END of each prompt (recency bias — models pay more attention to end of prompt)
+			// Build prompt for selected ratio only
 			const brandReminder = `\nREMINDER: The brand name is "${brand.name}" — display it clearly. Do NOT use any other brand name from reference images.`;
-			const prompt1x1 = `${basePrompt}\n\nASPECT RATIO: Square format. This is the base design format.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
-			const prompt9x16 = `${basePrompt}\n\nASPECT RATIO: Vertical/Stories format. Stack elements vertically — product in middle, text at top, CTA at bottom. More vertical whitespace between elements.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
-			const prompt16x9 = `${basePrompt}\n\nASPECT RATIO: Horizontal/Landscape format. Side-by-side layout — text on one side, product on the other. Single line headlines preferred.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
+
+			let ratioPrompt: string;
+			let aspectRatio: string;
+
+			if (selectedRatio === '9:16') {
+				ratioPrompt = `${basePrompt}\n\nASPECT RATIO: Vertical/Stories format. Stack elements vertically — product in middle, text at top, CTA at bottom. More vertical whitespace between elements.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
+				aspectRatio = '9:16';
+			} else if (selectedRatio === '16:9') {
+				ratioPrompt = `${basePrompt}\n\nASPECT RATIO: Horizontal/Landscape format. Side-by-side layout — text on one side, product on the other. Single line headlines preferred.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style as the square version.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
+				aspectRatio = '16:9';
+			} else {
+				ratioPrompt = `${basePrompt}\n\nASPECT RATIO: Square format. This is the base design format.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
+				aspectRatio = '1:1';
+			}
 
 			// Build product-only images (front + back + references) for Claude analysis
 			const productImageUrls = [
@@ -222,58 +234,37 @@ export class GenerationProcessor extends WorkerHost {
 				}
 			}
 
-			// Generate all 3 ratios in parallel with retry logic (3 attempts each)
-			const [result1x1, result9x16, result16x9] = await Promise.all([
-				this.geminiService.generateImageWithRetry(prompt1x1, referenceImages, '1:1', `${generated_ad_id}/1:1`, productDescription, imageMeta),
-				this.geminiService.generateImageWithRetry(prompt9x16, referenceImages, '9:16', `${generated_ad_id}/9:16`, productDescription, imageMeta),
-				this.geminiService.generateImageWithRetry(prompt16x9, referenceImages, '16:9', `${generated_ad_id}/16:9`, productDescription, imageMeta),
-			]);
+			// Generate ONLY the selected ratio (instead of all 3 — 3x faster)
+			const result = await this.geminiService.generateImageWithRetry(
+				ratioPrompt,
+				referenceImages,
+				aspectRatio,
+				`${generated_ad_id}/${aspectRatio.replace(':', 'x')}`,
+				productDescription,
+				imageMeta,
+			);
 
-			// 6. Upload all successful results in parallel
+			// 6. Upload the single result
 			this.generationGateway.emitProgress(user_id, {
 				job_id: generated_ad_id,
 				step: 'uploading',
-				message: 'Saving images...',
+				message: 'Saving image...',
 				progress_percent: 65,
 			});
 
 			const imageUrls: Record<string, string> = {};
-			const uploadTasks: Promise<void>[] = [];
 
-			if (result1x1.data) {
-				uploadTasks.push(
-					this.storageService.uploadImage(user_id, generated_ad_id, '1x1', Buffer.from(result1x1.data, 'base64'))
-						.then((url) => { imageUrls['1x1'] = url; })
-						.catch((err) => { this.logger.error(`Upload 1x1 failed: ${err.message}`); }),
+			if (result.data) {
+				const ratioKey = selectedRatio.replace(':', 'x');
+				const url = await this.storageService.uploadImage(
+					user_id,
+					generated_ad_id,
+					ratioKey,
+					Buffer.from(result.data, 'base64'),
 				);
+				imageUrls[ratioKey] = url;
 			} else {
-				this.logger.error(`1:1 generation failed after retries: ${result1x1.error}`);
-			}
-
-			if (result9x16.data) {
-				uploadTasks.push(
-					this.storageService.uploadImage(user_id, generated_ad_id, '9x16', Buffer.from(result9x16.data, 'base64'))
-						.then((url) => { imageUrls['9x16'] = url; })
-						.catch((err) => { this.logger.warn(`Upload 9x16 failed: ${err.message}`); }),
-				);
-			} else {
-				this.logger.warn(`9:16 generation failed after retries: ${result9x16.error}`);
-			}
-
-			if (result16x9.data) {
-				uploadTasks.push(
-					this.storageService.uploadImage(user_id, generated_ad_id, '16x9', Buffer.from(result16x9.data, 'base64'))
-						.then((url) => { imageUrls['16x9'] = url; })
-						.catch((err) => { this.logger.warn(`Upload 16x9 failed: ${err.message}`); }),
-				);
-			} else {
-				this.logger.warn(`16:9 generation failed after retries: ${result16x9.error}`);
-			}
-
-			await Promise.all(uploadTasks);
-
-			if (Object.keys(imageUrls).length === 0) {
-				throw new Error('All image generations failed — no images to save');
+				throw new Error(`${selectedRatio} generation failed after retries: ${result.error}`);
 			}
 
 			// 7. Ad copy (gemini_image_prompt'siz)
@@ -293,20 +284,23 @@ export class GenerationProcessor extends WorkerHost {
 				progress_percent: 85,
 			});
 
+			const updateData: Record<string, unknown> = {
+				claude_response_json: claudeResponse,
+				gemini_prompt: claudeResponse.gemini_image_prompt,
+				ad_copy_json: adCopyJson,
+				generation_status: GenerationStatus.COMPLETED,
+				ad_name: `${brand.name} — ${product.name}`,
+				brand_snapshot: brand,
+				product_snapshot: product,
+			};
+
+			if (imageUrls['1x1']) updateData.image_url_1x1 = imageUrls['1x1'];
+			if (imageUrls['9x16']) updateData.image_url_9x16 = imageUrls['9x16'];
+			if (imageUrls['16x9']) updateData.image_url_16x9 = imageUrls['16x9'];
+
 			const { error: updateError } = await this.databaseService.client
 				.from('generated_ads')
-				.update({
-					claude_response_json: claudeResponse,
-					gemini_prompt: claudeResponse.gemini_image_prompt,
-					image_url_1x1: imageUrls['1x1'] || null,
-					image_url_9x16: imageUrls['9x16'] || null,
-					image_url_16x9: imageUrls['16x9'] || null,
-					ad_copy_json: adCopyJson,
-					generation_status: GenerationStatus.COMPLETED,
-					ad_name: `${brand.name} — ${product.name}`,
-					brand_snapshot: brand,
-					product_snapshot: product,
-				})
+				.update(updateData)
 				.eq('_id', generated_ad_id);
 
 			if (updateError) {

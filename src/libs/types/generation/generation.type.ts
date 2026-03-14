@@ -136,6 +136,7 @@ export interface GenerationJobData {
 	variation_index?: number;
 	claude_variation?: ClaudeResponseJson;
 	product_description?: string;
+	selected_ratio?: '1:1' | '9:16' | '16:9';
 }
 
 /** BullMQ fix-errors job data */

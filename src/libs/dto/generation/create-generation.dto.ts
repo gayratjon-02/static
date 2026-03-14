@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsOptional, IsString, IsUUID, IsIn, MaxLength } from 'class-validator';
 
 export class CreateGenerationDto {
 	@IsUUID()
@@ -17,4 +17,9 @@ export class CreateGenerationDto {
 	@IsOptional()
 	@MaxLength(500)
 	important_notes?: string;
+
+	@IsString()
+	@IsOptional()
+	@IsIn(['1:1', '9:16', '16:9'])
+	selected_ratio?: '1:1' | '9:16' | '16:9';
 }

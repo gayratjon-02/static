@@ -25,8 +25,7 @@ export class GenerationService {
 	public async createGeneration(input: CreateGenerationDto, authMember: Member): Promise<Generation> {
 		const { brand_id, product_id, concept_id, important_notes } = input;
 
-		try {
-			// 1. Check brand existence and ownership
+		// 1. Check brand existence and ownership
 			const { data: brand, error: brandError } = await this.databaseService.client
 				.from('brands')
 				.select('_id')
@@ -146,6 +145,7 @@ export class GenerationService {
 					generated_ad_id: ad._id,
 					batch_id: batchId,
 					variation_index: i,
+					selected_ratio: input.selected_ratio ?? '1:1',
 				},
 				opts: {
 					removeOnComplete: true,
@@ -164,9 +164,6 @@ export class GenerationService {
 				status: GenerationStatus.PENDING,
 				message: Message.GENERATION_STARTED,
 			};
-		} catch (err) {
-			throw err;
-		}
 	}
 
 	public async cancelBatch(batchId: string, authMember: Member): Promise<{ cancelled: number }> {
