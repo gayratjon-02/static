@@ -9,7 +9,7 @@ import { FixErrorsDto } from '../../libs/dto/generation/fix-errors.dto';
 import { Message } from '../../libs/enums/common.enum';
 import { GenerationStatus } from '../../libs/enums/generation/generation.enum';
 import { Member } from '../../libs/types/member/member.type';
-import { Generation, GenerationJobData, GenerationStatusResponse, GenerationResultsResponse, FixErrorsJobData, ExportRatiosResponse } from '../../libs/types/generation/generation.type';
+import { Generation, GenerationJobData, GenerationStatusResponse, GenerationResultsResponse, FixErrorsJobData, GenerateRatioJobData, ExportRatiosResponse } from '../../libs/types/generation/generation.type';
 import { SystemConfigService } from '../system-config/system-config.service';
 
 @Injectable()
@@ -484,8 +484,42 @@ export class GenerationService {
 		};
 	}
 
+	async generateMissingRatio(adId: string, targetRatio: '1:1' | '9:16' | '16:9', authMember: Member): Promise<{ status: string }> {
+		console.log('GenerationService: generateMissingRatio');
+
+		const ratioField = { '1:1': 'image_url_1x1', '9:16': 'image_url_9x16', '16:9': 'image_url_16x9' }[targetRatio];
+		if (!ratioField) throw new BadRequestException(Message.SOMETHING_WENT_WRONG);
+
+		const { data, error } = await this.databaseService.client
+			.from('generated_ads')
+			.select('_id, user_id, brand_id, product_id, concept_id, generation_status, gemini_prompt, claude_response_json, image_url_1x1, image_url_9x16, image_url_16x9')
+			.eq('_id', adId)
+			.eq('user_id', authMember._id)
+			.single();
+
+		if (error || !data) throw new BadRequestException(Message.GENERATION_NOT_FOUND);
+		if (data.generation_status !== GenerationStatus.COMPLETED) throw new BadRequestException(Message.GENERATION_NOT_COMPLETED);
+
+		const existingUrl = data[ratioField as keyof typeof data];
+		if (existingUrl) return { status: 'already_exists' };
+
+		const jobData: GenerateRatioJobData = {
+			user_id: authMember._id,
+			ad_id: adId,
+			target_ratio: targetRatio,
+		};
+
+		await this.generationQueue.add('generate-ratio', jobData, {
+			removeOnComplete: true,
+			removeOnFail: false,
+		});
+
+		this.logger.log(`Generate-ratio job queued: ${adId} (${targetRatio})`);
+		return { status: 'queued' };
+	}
+
 	/** Get image URL for download (ownership verified) */
-	public async getImageUrl(adId: string, authMember: Member): Promise<string | null> {
+	async getImageUrl(adId: string, authMember: Member): Promise<string | null> {
 		const { data, error } = await this.databaseService.client
 			.from('generated_ads')
 			.select('image_url_1x1')

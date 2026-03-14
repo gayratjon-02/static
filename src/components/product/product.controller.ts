@@ -28,7 +28,7 @@ export class ProductController {
 	constructor(
 		private readonly productService: ProductService,
 		private readonly s3Service: S3Service,
-	) { }
+	) {}
 
 	// uploadPhoto — file upload for product photo
 	@UseGuards(AuthGuard)
@@ -46,10 +46,7 @@ export class ProductController {
 			},
 		}),
 	)
-	public async uploadPhoto(
-		@UploadedFile() file: Express.Multer.File,
-		@AuthMember() authMember: Member,
-	) {
+	public async uploadPhoto(@UploadedFile() file: Express.Multer.File, @AuthMember() authMember: Member) {
 		if (!file) {
 			throw new BadRequestException('No file uploaded');
 		}
@@ -62,10 +59,7 @@ export class ProductController {
 	// createProduct
 	@UseGuards(AuthGuard)
 	@Post('createProduct')
-	public async createProduct(
-		@Body() input: CreateProductDto,
-		@AuthMember() authMember: Member,
-	): Promise<Product> {
+	public async createProduct(@Body() input: CreateProductDto, @AuthMember() authMember: Member): Promise<Product> {
 		return this.productService.createProduct(input, authMember);
 	}
 
@@ -84,10 +78,7 @@ export class ProductController {
 	// getProduct — one product
 	@UseGuards(AuthGuard)
 	@Get('getProductById/:id')
-	public async getProduct(
-		@Param('id') id: string,
-		@AuthMember() authMember: Member,
-	): Promise<Product> {
+	public async getProduct(@Param('id') id: string, @AuthMember() authMember: Member): Promise<Product> {
 		return this.productService.getProduct(id, authMember);
 	}
 
@@ -105,20 +96,14 @@ export class ProductController {
 	// deleteProduct
 	@UseGuards(AuthGuard)
 	@Post('deleteProductById/:id')
-	public async deleteProduct(
-		@Param('id') id: string,
-		@AuthMember() authMember: Member,
-	): Promise<{ message: string }> {
+	public async deleteProduct(@Param('id') id: string, @AuthMember() authMember: Member): Promise<{ message: string }> {
 		return this.productService.deleteProduct(id, authMember);
 	}
 
 	// importFromUrl
 	@UseGuards(AuthGuard)
 	@Post('importFromUrl')
-	public async importFromUrl(
-		@Body('url') url: string,
-		@AuthMember() authMember: Member,
-	) {
+	public async importFromUrl(@Body('url') url: string, @AuthMember() authMember: Member) {
 		if (!url) throw new BadRequestException('URL is required');
 		return this.productService.importFromUrl(url);
 	}
@@ -126,10 +111,7 @@ export class ProductController {
 	// removeBackground
 	@UseGuards(AuthGuard)
 	@Post('removeBackground/:id')
-	public async removeBackground(
-		@Param('id') id: string,
-		@AuthMember() authMember: Member,
-	) {
+	public async removeBackground(@Param('id') id: string, @AuthMember() authMember: Member) {
 		return this.productService.removeBackground(id, authMember, this.s3Service);
 	}
 }

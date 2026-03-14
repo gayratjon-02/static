@@ -8,7 +8,7 @@ import { StorageService } from '../../libs/services/storage.service';
 import { PromptValidatorService } from '../../libs/services/prompt-validator.service';
 import { GenerationRulesService } from '../../libs/services/generation-rules.service';
 import { GenerationGateway } from '../../socket/generation.gateway';
-import { GenerationJobData, FixErrorsJobData, ClaudeResponseJson } from '../../libs/types/generation/generation.type';
+import { GenerationJobData, FixErrorsJobData, GenerateRatioJobData, ClaudeResponseJson } from '../../libs/types/generation/generation.type';
 import { GenerationStatus } from '../../libs/enums/generation/generation.enum';
 import { Brand } from '../../libs/types/brand/brand.type';
 import { Product } from '../../libs/types/product/product.type';
@@ -33,6 +33,9 @@ export class GenerationProcessor extends WorkerHost {
 	async process(job: Job): Promise<void> {
 		if (job.name === 'fix-errors') {
 			return this.processFixErrors(job as Job<FixErrorsJobData>);
+		}
+		if (job.name === 'generate-ratio') {
+			return this.processGenerateRatio(job as Job<GenerateRatioJobData>);
 		}
 		return this.processCreateAd(job as Job<GenerationJobData>);
 	}
@@ -339,6 +342,118 @@ export class GenerationProcessor extends WorkerHost {
 			});
 
 			throw error;
+		}
+	}
+
+	private async processGenerateRatio(job: Job<GenerateRatioJobData>): Promise<void> {
+		const { user_id, ad_id, target_ratio } = job.data;
+		this.logger.log(`Processing generate-ratio job: ${ad_id} (${target_ratio})`);
+
+		try {
+			const { data: ad, error: adError } = await this.databaseService.client
+				.from('generated_ads')
+				.select('_id, brand_id, product_id, concept_id, gemini_prompt, claude_response_json, brand_snapshot, product_snapshot')
+				.eq('_id', ad_id)
+				.eq('user_id', user_id)
+				.single();
+
+			if (adError || !ad) throw new Error('Ad not found');
+
+			const [brand, product, concept] = await Promise.all([
+				this.fetchBrand(ad.brand_id),
+				this.fetchProduct(ad.product_id),
+				this.fetchConcept(ad.concept_id),
+			]);
+
+			const claudeResponse = ad.claude_response_json as ClaudeResponseJson;
+			const brandColorDesc = this.buildBrandColorDescription(brand);
+			const brandOverride = `═══ HIGHEST PRIORITY — BRAND NAME ═══\nTHE BRAND NAME IS: "${brand.name}"\nSPELL IT: ${brand.name.split('').join(' - ')}\n═══════════════════════════════════════\n\n`;
+			const productContext = this.buildProductContext(brand, product);
+			const textSpec = this.buildTextRenderingSpec(claudeResponse);
+			const basePrompt = brandOverride + productContext + textSpec + (ad.gemini_prompt || claudeResponse.gemini_image_prompt);
+			const brandReminder = `\nREMINDER: The brand name is "${brand.name}" — display it clearly.`;
+
+			let ratioPrompt: string;
+			let aspectRatio: string;
+
+			if (target_ratio === '9:16') {
+				ratioPrompt = `${basePrompt}\n\nASPECT RATIO: Vertical/Stories format. Stack elements vertically — product in middle, text at top, CTA at bottom.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
+				aspectRatio = '9:16';
+			} else if (target_ratio === '16:9') {
+				ratioPrompt = `${basePrompt}\n\nASPECT RATIO: Horizontal/Landscape format. Side-by-side layout — text on one side, product on the other.\nCRITICAL: MAINTAIN IDENTICAL colors, mood, and style.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
+				aspectRatio = '16:9';
+			} else {
+				ratioPrompt = `${basePrompt}\n\nASPECT RATIO: Square format. This is the base design format.\nCOLOR PALETTE TO MATCH EXACTLY: ${brandColorDesc}${brandReminder}`;
+				aspectRatio = '1:1';
+			}
+
+			const productImageUrls = [
+				product.photo_url,
+				product.back_image_url,
+				...(product.reference_image_urls ?? []),
+			].filter(Boolean);
+
+			const referenceImages = [
+				...productImageUrls,
+				brand.logo_url,
+				concept.image_url,
+			].filter(Boolean);
+
+			const imageMeta = {
+				productImageCount: productImageUrls.length,
+				hasLogo: !!brand.logo_url,
+				hasConcept: !!concept.image_url,
+			};
+
+			this.generationGateway.emitProgress(user_id, {
+				job_id: ad_id,
+				step: 'generating_images',
+				message: `Generating ${target_ratio} ratio...`,
+				progress_percent: 30,
+			});
+
+			const result = await this.geminiService.generateImageWithRetry(
+				ratioPrompt,
+				referenceImages,
+				aspectRatio,
+				`${ad_id}/${aspectRatio.replace(':', 'x')}`,
+				'',
+				imageMeta,
+			);
+
+			if (!result.data) throw new Error(`${target_ratio} generation failed`);
+
+			const ratioKey = target_ratio.replace(':', 'x');
+			const url = await this.storageService.uploadImage(
+				user_id,
+				ad_id,
+				ratioKey,
+				Buffer.from(result.data, 'base64'),
+			);
+
+			const updateField = `image_url_${ratioKey}`;
+			await this.databaseService.client
+				.from('generated_ads')
+				.update({ [updateField]: url })
+				.eq('_id', ad_id);
+
+			this.generationGateway.emitCompleted(user_id, {
+				job_id: `ratio_${ad_id}_${ratioKey}`,
+				ad_id,
+				image_url: url,
+			});
+
+			this.logger.log(`Generate-ratio completed: ${ad_id} (${target_ratio})`);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			this.logger.error(`Generate-ratio failed: ${ad_id} (${target_ratio}) — ${message}`);
+
+			this.generationGateway.emitFailed(user_id, {
+				job_id: `ratio_${ad_id}_${target_ratio.replace(':', 'x')}`,
+				error: message,
+			});
+
+			throw err;
 		}
 	}
 

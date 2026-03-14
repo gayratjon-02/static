@@ -139,6 +139,13 @@ export interface GenerationJobData {
 	selected_ratio?: '1:1' | '9:16' | '16:9';
 }
 
+/** BullMQ generate-ratio job data */
+export interface GenerateRatioJobData {
+	user_id: string;
+	ad_id: string;
+	target_ratio: '1:1' | '9:16' | '16:9';
+}
+
 /** BullMQ fix-errors job data */
 export interface FixErrorsJobData {
 	user_id: string;

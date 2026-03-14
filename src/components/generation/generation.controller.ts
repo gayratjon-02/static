@@ -92,8 +92,18 @@ export class GenerationController {
 	}
 
 	@UseGuards(AuthGuard)
+	@Post('generateRatio/:adId/:ratio')
+	async generateRatio(
+		@Param('adId') adId: string,
+		@Param('ratio') ratio: '1:1' | '9:16' | '16:9',
+		@AuthMember() authMember: Member,
+	): Promise<{ status: string }> {
+		return this.generationService.generateMissingRatio(adId, ratio, authMember);
+	}
+
+	@UseGuards(AuthGuard)
 	@Post('exportRatios/:adId')
-	public async exportRatios(
+	async exportRatios(
 		@Param('adId') adId: string,
 		@AuthMember() authMember: Member,
 	): Promise<ExportRatiosResponse> {
