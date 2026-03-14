@@ -39,7 +39,8 @@ export class CanvaController {
 		try {
 			await this.canvaOAuthService.handleCallback(code, state);
 			return res.redirect(`${frontendUrl}/account?canva=connected`);
-		} catch {
+		} catch (err: unknown) {
+			console.error('CanvaController: callback error:', err instanceof Error ? err.message : err);
 			return res.redirect(`${frontendUrl}/account?canva=failed`);
 		}
 	}

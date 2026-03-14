@@ -105,6 +105,8 @@ export class CanvaOAuthService {
 			redirect_uri: oauthState.redirect_uri,
 		});
 
+		console.log('CanvaOAuthService: exchanging code for token...');
+
 		const response = await fetch(CANVA_TOKEN_URL, {
 			method: 'POST',
 			headers: {
@@ -114,7 +116,12 @@ export class CanvaOAuthService {
 			body: body.toString(),
 		});
 
-		if (!response.ok) throw new BadRequestException(Message.CANVA_AUTH_FAILED);
+		console.log('CanvaOAuthService: token response status:', response.status);
+		if (!response.ok) {
+			const errorBody = await response.text();
+			console.error('CanvaOAuthService: token exchange failed:', response.status, errorBody);
+			throw new BadRequestException(Message.CANVA_AUTH_FAILED);
+		}
 
 		const tokens: CanvaTokenResponse = await response.json();
 		const tokenExpiresAt = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
